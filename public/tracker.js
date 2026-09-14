@@ -15,6 +15,20 @@
  *
  * Pra marcar uma conversão de verdade (ex: pagamento confirmado, cadastro concluído):
  *   relinqTrack('conversao')
+ *
+ * Rotulando qual botão específico foi clicado (ex: qual plano):
+ * Isso é AUTOMÁTICO, sem precisar mexer no HTML da LP — o tracker olha o
+ * "card" em volta do botão clicado e usa o título (h1–h6) mais próximo
+ * como rótulo (ex: o card do plano "Essential" tem um <h3>Essential</h3>,
+ * então cliques nesse botão específico ficam rotulados "Essential",
+ * mesmo continuando a contar juntos em clique_whatsapp).
+ * Se a LP tiver um seletor de período de cobrança com a classe "cycle-btn"
+ * e "active" no botão selecionado (ex: <button class="cycle-btn active"
+ * data-cycle="anual">Anual</button>), esse período entra junto no rótulo
+ * automaticamente (ex: "Essential (anual)").
+ * Em algum caso raro onde a detecção automática pegar o título errado,
+ * dá pra forçar manualmente com data-plano="Nome" num elemento em volta
+ * do botão — mas isso é só um ajuste fino opcional, não é necessário.
  */
 (function () {
   var scriptTag = document.currentScript;
@@ -96,6 +110,10 @@
     enviarPayload(montarPayload(evento));
   }
 
+  function enviarComRotulo(evento, rotulo) {
+    enviarPayload(montarPayload(evento, { rotulo: rotulo }));
+  }
+
   function enviarVideo(evento, videoId, valor) {
     enviarPayload(montarPayload(evento, { video_id: videoId, valor: valor }));
   }
@@ -109,6 +127,14 @@
   // sociais) e qualquer link/botão cuja classe pareça um CTA (cta/btn/pricing).
   // Elementos que já têm onclick="relinqTrack(...)" manual são ignorados aqui,
   // pra não disparar o evento em dobro.
+  //
+  // ROTULAGEM: quando o elemento clicado (ou um ancestral próximo) tem o
+  // atributo data-plano="Essential", isso vira o "rotulo" do evento — o
+  // tipo_evento continua o mesmo (ex: clique_whatsapp), então a contagem
+  // agregada não muda, mas agora dá pra ver a quebra por botão no painel.
+  // Se a página tiver um seletor de período de cobrança com a classe
+  // "cycle-btn" e "active" no botão selecionado (ex: <button class="cycle-btn
+  // active" data-cycle="anual">), esse período entra junto no rótulo.
   (function autoTrackCtas() {
     function destinoConhecido(href) {
       if (!href) return null;
@@ -148,6 +174,55 @@
       return slug ? "clique_cta_" + slug : "clique_cta";
     }
 
+    function comCiclo(rotulo) {
+      // Se a página tiver um seletor de período de cobrança (padrão comum:
+      // botão com classe "cycle-btn" e "active" quando selecionado), esse
+      // período entra junto no rótulo automaticamente. Se a LP não tiver
+      // esse padrão, isso simplesmente não encontra nada e é ignorado.
+      var cicloAtivo = document.querySelector(".cycle-btn.active[data-cycle]");
+      var ciclo = cicloAtivo ? cicloAtivo.getAttribute("data-cycle") : null;
+      return ciclo ? rotulo + " (" + ciclo + ")" : rotulo;
+    }
+
+    // Descobre automaticamente qual "card" ou bloco o botão pertence, sem
+    // precisar de nenhuma marcação manual no HTML da LP — funciona em
+    // qualquer LP com o padrão comum de "card com título + botão".
+    //
+    // Sobe pelos elementos-pai a partir do botão clicado. A cada nível,
+    // olha se aquele container tem só ESSE botão dentro dele (não vários) —
+    // se tiver mais de um link/botão, já passou do "card" e entrou numa
+    // seção que lista vários CTAs juntos (ex: a fileira inteira de planos),
+    // então para a busca ali, pra não pegar um título errado. Dentro do
+    // nível certo, usa o texto do primeiro título (h1–h6) que encontrar
+    // como rótulo — normalmente é o nome do plano/produto daquele card.
+    //
+    // Continua aceitando um data-plano="..." manual no HTML como forma de
+    // corrigir um caso específico, mas isso deixou de ser necessário.
+    function pegarRotulo(el) {
+      var comPlanoManual = el.closest ? el.closest("[data-plano]") : null;
+      if (comPlanoManual) {
+        return comCiclo(comPlanoManual.getAttribute("data-plano"));
+      }
+
+      var atual = el.parentElement;
+      var nivel = 0;
+
+      while (atual && nivel < 6) {
+        var interativosDentro = atual.querySelectorAll("a[href], button").length;
+        if (interativosDentro > 1) break; // container amplo demais — não é mais um card específico
+
+        var titulo = atual.querySelector("h1, h2, h3, h4, h5, h6");
+        if (titulo && titulo.textContent.trim()) {
+          return comCiclo(titulo.textContent.trim());
+        }
+
+        atual = atual.parentElement;
+        nivel++;
+      }
+
+      return null;
+    }
+
     function jaTemTrackingManual(el) {
       var onclick = el.getAttribute("onclick") || "";
       return onclick.indexOf("relinqTrack(") !== -1;
@@ -166,7 +241,12 @@
       var destino = destinoConhecido(el.getAttribute("href"));
       var evento = nomeDoEvento(el, destino);
       el.addEventListener("click", function () {
-        enviar(evento);
+        var rotulo = pegarRotulo(el);
+        if (rotulo) {
+          enviarComRotulo(evento, rotulo);
+        } else {
+          enviar(evento);
+        }
       });
     }
 

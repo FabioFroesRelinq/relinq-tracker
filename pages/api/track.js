@@ -50,6 +50,8 @@ export default async function handler(req, res) {
   const {
     site,           // slug do site, ex: "relinq-beauty"
     evento,         // tipo do evento, ex: "visita", "clique_whatsapp", "video_progress"
+    rotulo,         // identifica qual botão específico gerou o evento (ex: "Essential - anual"),
+                     // sem afetar a contagem agregada por "evento"
     pagina,
     video_id,       // identifica o video, se houver mais de um na LP
     valor,          // uso livre: percentual (video_progress/scroll_profundidade) ou segundos (tempo_pagina, etc.)
@@ -82,11 +84,12 @@ export default async function handler(req, res) {
 
     await pool.query(
       `INSERT INTO events
-        (site_id, tipo_evento, pagina, video_id, valor, visitor_id, dispositivo, utm_source, utm_medium, utm_campaign, utm_content, utm_term)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (site_id, tipo_evento, rotulo, pagina, video_id, valor, visitor_id, dispositivo, utm_source, utm_medium, utm_campaign, utm_content, utm_term)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         siteId,
         evento,
+        rotulo || null,
         pagina || null,
         video_id || null,
         valor === undefined || valor === null ? null : Number(valor),

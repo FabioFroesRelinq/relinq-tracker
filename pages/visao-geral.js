@@ -24,15 +24,27 @@ export default function VisaoGeral() {
 
   useEffect(
     function () {
-      setCarregando(true);
-      fetch("/api/visao-geral?inicio=" + dataInicio + "&fim=" + dataFim)
-        .then(function (r) {
-          return r.json();
-        })
-        .then(function (resultado) {
-          setDados(resultado);
-          setCarregando(false);
-        });
+      var primeiraCarga = true;
+
+      function carregarVisaoGeral() {
+        if (primeiraCarga) setCarregando(true);
+        fetch("/api/visao-geral?inicio=" + dataInicio + "&fim=" + dataFim)
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (resultado) {
+            setDados(resultado);
+            setCarregando(false);
+            primeiraCarga = false;
+          });
+      }
+
+      carregarVisaoGeral();
+      var intervalo = setInterval(carregarVisaoGeral, 10000); // atualiza sozinho a cada 10s
+
+      return function () {
+        clearInterval(intervalo);
+      };
     },
     [dataInicio, dataFim]
   );
@@ -51,6 +63,7 @@ export default function VisaoGeral() {
           <button className="btn-sair" onClick={sair}>Sair</button>
         </div>
       </div>
+      <p className="atualizacao-automatica">🔄 Atualiza automaticamente a cada 10s</p>
 
       <div className="filtros">
         <input type="date" value={dataInicio} onChange={function (e) { setDataInicio(e.target.value); }} />

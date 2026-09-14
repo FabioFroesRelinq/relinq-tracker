@@ -88,6 +88,17 @@ export default async function handler(req, res) {
       filtroData
     );
 
+    // --- Cliques por rótulo, dentro de cada tipo (ex: qual plano/botão
+    // específico foi clicado, sem separar da contagem agregada acima) ---
+    const [cliquesPorRotulo] = await pool.query(
+      `SELECT tipo_evento, rotulo, COUNT(*) AS total
+       FROM events
+       WHERE site_id = ? AND criado_em BETWEEN ? AND ? AND tipo_evento LIKE 'clique\\_%' AND rotulo IS NOT NULL
+       GROUP BY tipo_evento, rotulo
+       ORDER BY tipo_evento, total DESC`,
+      filtroData
+    );
+
     // --- Visitantes únicos ---
     const [[{ visitantesUnicos }]] = await pool.query(
       `SELECT COUNT(DISTINCT visitor_id) AS visitantesUnicos
@@ -175,6 +186,7 @@ export default async function handler(req, res) {
       porCampanha,
       porCriativo,
       cliquesPorTipo,
+      cliquesPorRotulo,
       engajamento: {
         visitantesUnicos: Number(visitantesUnicos),
         taxaRejeicao,

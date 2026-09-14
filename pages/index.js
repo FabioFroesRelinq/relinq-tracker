@@ -97,22 +97,34 @@ export default function Dashboard() {
   useEffect(
     function () {
       if (!siteSelecionado) return;
-      setCarregando(true);
-      fetch(
-        "/api/stats?site=" +
-          siteSelecionado +
-          "&inicio=" +
-          dataInicio +
-          "&fim=" +
-          dataFim
-      )
-        .then(function (r) {
-          return r.json();
-        })
-        .then(function (dados) {
-          setStats(dados);
-          setCarregando(false);
-        });
+      var primeiraCarga = true;
+
+      function carregarStats() {
+        if (primeiraCarga) setCarregando(true);
+        fetch(
+          "/api/stats?site=" +
+            siteSelecionado +
+            "&inicio=" +
+            dataInicio +
+            "&fim=" +
+            dataFim
+        )
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (dados) {
+            setStats(dados);
+            setCarregando(false);
+            primeiraCarga = false;
+          });
+      }
+
+      carregarStats();
+      var intervalo = setInterval(carregarStats, 10000); // atualiza sozinho a cada 10s
+
+      return function () {
+        clearInterval(intervalo);
+      };
     },
     [siteSelecionado, dataInicio, dataFim]
   );
@@ -136,6 +148,7 @@ export default function Dashboard() {
           <button className="btn-sair" onClick={sair}>Sair</button>
         </div>
       </div>
+      <p className="atualizacao-automatica">🔄 Atualiza automaticamente a cada 10s</p>
 
       {sites.length === 0 ? (
         <p className="vazio">
@@ -237,6 +250,13 @@ export default function Dashboard() {
                 <TabelaCliques cliquesPorTipo={stats.cliquesPorTipo} />
               </div>
 
+              {stats.cliquesPorRotulo && stats.cliquesPorRotulo.length > 0 && (
+                <div className="secao">
+                  <h2>Detalhamento por botão</h2>
+                  <TabelaRotulo cliquesPorRotulo={stats.cliquesPorRotulo} />
+                </div>
+              )}
+
               <div className="secao">
                 <h2>Dispositivo</h2>
                 <TabelaDispositivo porDispositivo={stats.engajamento.porDispositivo} totalVisitas={visitas} />
@@ -297,6 +317,39 @@ function TabelaCliques({ cliquesPorTipo }) {
               <td>{c.total}</td>
             </tr>
           );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+function TabelaRotulo({ cliquesPorRotulo }) {
+  var porTipo = {};
+  cliquesPorRotulo.forEach(function (c) {
+    if (!porTipo[c.tipo_evento]) porTipo[c.tipo_evento] = [];
+    porTipo[c.tipo_evento].push(c);
+  });
+
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Tipo de clique</th>
+          <th>Botão / rótulo</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {Object.keys(porTipo).map(function (tipo) {
+          return porTipo[tipo].map(function (c, i) {
+            return (
+              <tr key={tipo + "-" + c.rotulo}>
+                <td>{i === 0 ? nomeAmigavelEvento(tipo) : ""}</td>
+                <td>{c.rotulo}</td>
+                <td>{c.total}</td>
+              </tr>
+            );
+          });
         })}
       </tbody>
     </table>
