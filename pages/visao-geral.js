@@ -58,7 +58,14 @@ export default function VisaoGeral() {
   return (
     <div className="container">
       <div className="header">
-        <h1>Visão geral</h1>
+        <div className="header-titulo">
+          <img
+            src="https://lightblue-monkey-580531.hostingersite.com/wp-content/uploads/2026/09/logo-removebg-preview.png"
+            alt="Relinq"
+            className="logo-relinq"
+          />
+          <h1>Visão geral</h1>
+        </div>
         <div className="nav">
           <Link href="/">← Painel por LP</Link>
           <button className="btn-sair" onClick={sair}>Sair</button>

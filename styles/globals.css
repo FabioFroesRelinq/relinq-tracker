@@ -418,7 +418,28 @@ tbody tr:last-child td {
   margin: -8px 0 16px;
 }
 
-/* --- Gráfico --- */
+/* --- Logo --- */
+.logo-relinq {
+  height: 42px;
+  width: auto;
+  display: block;
+  /* Recolore a logo pra branco puro, já que o arquivo original tem fundo
+     transparente com uma única cor sólida — assim ela combina com o tema
+     escuro sem precisar reprocessar a imagem em si. */
+  filter: brightness(0) invert(1);
+}
+
+.header-titulo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.login-box .logo-relinq {
+  height: 38px;
+  margin: 0 auto 18px;
+}
+
 .grafico-legenda {
   display: flex;
   gap: 22px;

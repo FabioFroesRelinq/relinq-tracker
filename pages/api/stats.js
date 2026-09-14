@@ -17,35 +17,56 @@ export default async function handler(req, res) {
     .slice(0, 10);
   const dataFim = fim || new Date().toISOString().slice(0, 10);
 
+  const todasLPs = site === "todas";
+
   try {
     const pool = getPool();
 
-    const [siteRows] = await pool.query(
-      "SELECT id, nome FROM sites WHERE slug = ? LIMIT 1",
-      [site]
-    );
+    let nomeExibido = "Todas as LPs";
+    let totalSites = null;
 
-    if (siteRows.length === 0) {
-      return res.status(404).json({ erro: `Site '${site}' não encontrado` });
+    let siteId = null;
+
+    if (!todasLPs) {
+      const [siteRows] = await pool.query(
+        "SELECT id, nome FROM sites WHERE slug = ? LIMIT 1",
+        [site]
+      );
+
+      if (siteRows.length === 0) {
+        return res.status(404).json({ erro: `Site '${site}' não encontrado` });
+      }
+
+      nomeExibido = siteRows[0].nome;
+      siteId = siteRows[0].id;
+    } else {
+      const [[{ total }]] = await pool.query("SELECT COUNT(*) AS total FROM sites");
+      totalSites = total;
+      nomeExibido = `Todas as LPs (${total})`;
     }
 
-    const siteId = siteRows[0].id;
-    const filtroData = [siteId, `${dataInicio} 00:00:00`, `${dataFim} 23:59:59`];
+    // "site_id = ?" só entra na query quando um site específico foi escolhido;
+    // no modo "todas as LPs" essa condição simplesmente não existe, e os
+    // dados de todo mundo entram juntos nas mesmas somas/agrupamentos.
+    const condSite = todasLPs ? "" : "site_id = ? AND ";
+
+    const paramsSite = todasLPs ? [] : [siteId];
+    const filtroData = [...paramsSite, `${dataInicio} 00:00:00`, `${dataFim} 23:59:59`];
 
     // Totais por tipo de evento (visita, clique_whatsapp, conversao, etc.)
     const [totaisPorTipo] = await pool.query(
       `SELECT tipo_evento, COUNT(*) AS total
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ?
+       WHERE ${condSite}criado_em BETWEEN ? AND ?
        GROUP BY tipo_evento`,
       filtroData
     );
 
-    // Série diária (pra gráfico de linha)
+    // Série diária (pra gráfico)
     const [serieDiaria] = await pool.query(
       `SELECT DATE(criado_em) AS dia, tipo_evento, COUNT(*) AS total
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ?
+       WHERE ${condSite}criado_em BETWEEN ? AND ?
        GROUP BY DATE(criado_em), tipo_evento
        ORDER BY dia`,
       filtroData
@@ -55,7 +76,7 @@ export default async function handler(req, res) {
     const [porOrigem] = await pool.query(
       `SELECT COALESCE(utm_source, 'direto') AS utm_source, tipo_evento, COUNT(*) AS total
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ?
+       WHERE ${condSite}criado_em BETWEEN ? AND ?
        GROUP BY utm_source, tipo_evento`,
       filtroData
     );
@@ -64,7 +85,7 @@ export default async function handler(req, res) {
     const [porCampanha] = await pool.query(
       `SELECT utm_campaign, tipo_evento, COUNT(*) AS total
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ? AND utm_campaign IS NOT NULL
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND utm_campaign IS NOT NULL
        GROUP BY utm_campaign, tipo_evento`,
       filtroData
     );
@@ -73,7 +94,7 @@ export default async function handler(req, res) {
     const [porCriativo] = await pool.query(
       `SELECT utm_content, tipo_evento, COUNT(*) AS total
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ? AND utm_content IS NOT NULL
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND utm_content IS NOT NULL
        GROUP BY utm_content, tipo_evento`,
       filtroData
     );
@@ -82,7 +103,7 @@ export default async function handler(req, res) {
     const [cliquesPorTipo] = await pool.query(
       `SELECT tipo_evento, COUNT(*) AS total
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ? AND tipo_evento LIKE 'clique\\_%'
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento LIKE 'clique\\_%'
        GROUP BY tipo_evento
        ORDER BY total DESC`,
       filtroData
@@ -93,7 +114,7 @@ export default async function handler(req, res) {
     const [cliquesPorRotulo] = await pool.query(
       `SELECT tipo_evento, rotulo, COUNT(*) AS total
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ? AND tipo_evento LIKE 'clique\\_%' AND rotulo IS NOT NULL
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento LIKE 'clique\\_%' AND rotulo IS NOT NULL
        GROUP BY tipo_evento, rotulo
        ORDER BY tipo_evento, total DESC`,
       filtroData
@@ -103,7 +124,7 @@ export default async function handler(req, res) {
     const [[{ visitantesUnicos }]] = await pool.query(
       `SELECT COUNT(DISTINCT visitor_id) AS visitantesUnicos
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ? AND tipo_evento = 'visita' AND visitor_id IS NOT NULL`,
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento = 'visita' AND visitor_id IS NOT NULL`,
       filtroData
     );
 
@@ -111,7 +132,7 @@ export default async function handler(req, res) {
     const [porDispositivo] = await pool.query(
       `SELECT COALESCE(dispositivo, 'desconhecido') AS dispositivo, COUNT(*) AS total
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ? AND tipo_evento = 'visita'
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento = 'visita'
        GROUP BY dispositivo`,
       filtroData
     );
@@ -120,7 +141,7 @@ export default async function handler(req, res) {
     const [scrollProfundidade] = await pool.query(
       `SELECT valor AS marco, COUNT(DISTINCT visitor_id) AS total
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ? AND tipo_evento = 'scroll_profundidade'
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento = 'scroll_profundidade'
        GROUP BY valor
        ORDER BY marco`,
       filtroData
@@ -130,7 +151,7 @@ export default async function handler(req, res) {
     const [[{ tempoMedioSegundos }]] = await pool.query(
       `SELECT AVG(valor) AS tempoMedioSegundos
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ? AND tipo_evento = 'tempo_pagina'`,
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento = 'tempo_pagina'`,
       filtroData
     );
 
@@ -138,7 +159,7 @@ export default async function handler(req, res) {
     const [[{ visitantesEngajados }]] = await pool.query(
       `SELECT COUNT(DISTINCT visitor_id) AS visitantesEngajados
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ?
+       WHERE ${condSite}criado_em BETWEEN ? AND ?
          AND visitor_id IS NOT NULL
          AND (tipo_evento = 'conversao' OR tipo_evento LIKE 'clique\\_%')`,
       filtroData
@@ -153,7 +174,7 @@ export default async function handler(req, res) {
     const [videoPlays] = await pool.query(
       `SELECT video_id, COUNT(*) AS total
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ? AND tipo_evento = 'video_play'
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento = 'video_play'
        GROUP BY video_id`,
       filtroData
     );
@@ -162,7 +183,7 @@ export default async function handler(req, res) {
     const [videoRetencao] = await pool.query(
       `SELECT video_id, valor AS marco, COUNT(*) AS total
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ? AND tipo_evento = 'video_progress'
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento = 'video_progress'
        GROUP BY video_id, valor
        ORDER BY video_id, marco`,
       filtroData
@@ -172,13 +193,15 @@ export default async function handler(req, res) {
     const [videoCompletos] = await pool.query(
       `SELECT video_id, COUNT(*) AS total, AVG(valor) AS duracao_media_segundos
        FROM events
-       WHERE site_id = ? AND criado_em BETWEEN ? AND ? AND tipo_evento = 'video_complete'
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento = 'video_complete'
        GROUP BY video_id`,
       filtroData
     );
 
     return res.status(200).json({
-      site: siteRows[0].nome,
+      site: nomeExibido,
+      todasLPs,
+      totalSites,
       periodo: { inicio: dataInicio, fim: dataFim },
       totaisPorTipo,
       serieDiaria,

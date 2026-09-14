@@ -86,7 +86,14 @@ export default function CadastroSites() {
   return (
     <div className="container">
       <div className="header">
-        <h1>Cadastrar LP</h1>
+        <div className="header-titulo">
+          <img
+            src="https://lightblue-monkey-580531.hostingersite.com/wp-content/uploads/2026/09/logo-removebg-preview.png"
+            alt="Relinq"
+            className="logo-relinq"
+          />
+          <h1>Cadastrar LP</h1>
+        </div>
         <div className="nav">
           <Link href="/">← Voltar ao painel</Link>
           <button className="btn-sair" onClick={sair}>Sair</button>

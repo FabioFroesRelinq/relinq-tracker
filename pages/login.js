@@ -38,6 +38,11 @@ export default function Login() {
   return (
     <div className="login-container">
       <form className="login-box" onSubmit={entrar}>
+        <img
+          src="https://lightblue-monkey-580531.hostingersite.com/wp-content/uploads/2026/09/logo-removebg-preview.png"
+          alt="Relinq"
+          className="logo-relinq"
+        />
         <h1>Relinq Tracker</h1>
         <p>Acesso restrito ao time.</p>
 

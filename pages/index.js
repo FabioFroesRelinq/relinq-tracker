@@ -142,7 +142,14 @@ export default function Dashboard() {
   return (
     <div className="container">
       <div className="header">
-        <h1>Relinq Tracker</h1>
+        <div className="header-titulo">
+          <img
+            src="https://lightblue-monkey-580531.hostingersite.com/wp-content/uploads/2026/09/logo-removebg-preview.png"
+            alt="Relinq"
+            className="logo-relinq"
+          />
+          <h1>Relinq Tracker</h1>
+        </div>
         <div className="nav">
           <Link href="/visao-geral">Visão geral</Link>
           <Link href="/sites">+ Cadastrar LP</Link>
@@ -166,6 +173,7 @@ export default function Dashboard() {
                 setSiteSelecionado(e.target.value);
               }}
             >
+              <option value="todas">📊 Todas as LPs juntas</option>
               {sites.map(function (s) {
                 return (
                   <option key={s.slug} value={s.slug}>
@@ -245,7 +253,7 @@ export default function Dashboard() {
 
               <div className="secao">
                 <h2>Visitas por dia</h2>
-                <GraficoLinha serieDiaria={stats.serieDiaria} />
+                <GraficoColunas serieDiaria={stats.serieDiaria} />
               </div>
 
               <div className="secao">
@@ -498,7 +506,7 @@ function arredondarParaCima(valor) {
   return passo * magnitude;
 }
 
-function GraficoLinha({ serieDiaria }) {
+function GraficoColunas({ serieDiaria }) {
   if (!serieDiaria || serieDiaria.length === 0) {
     return <p className="vazio">Sem dados nesse período.</p>;
   }
@@ -526,7 +534,7 @@ function GraficoLinha({ serieDiaria }) {
 
   var largura = 1200;
   var altura = 340;
-  var margem = { topo: 20, baixo: 36, esq: 48, dir: 20 };
+  var margem = { topo: 24, baixo: 36, esq: 48, dir: 20 };
   var areaLargura = largura - margem.esq - margem.dir;
   var areaAltura = altura - margem.topo - margem.baixo;
 
@@ -538,42 +546,28 @@ function GraficoLinha({ serieDiaria }) {
   );
   var maxEixo = arredondarParaCima(maiorValor);
 
-  function coordX(i) {
-    return pontos.length <= 1
-      ? margem.esq
-      : margem.esq + (i / (pontos.length - 1)) * areaLargura;
-  }
-
   function coordY(valor) {
     return margem.topo + areaAltura - (valor / maxEixo) * areaAltura;
   }
 
-  function gerarLinha(campo) {
-    return pontos
-      .map(function (p, i) {
-        return (i === 0 ? "M" : "L") + coordX(i) + "," + coordY(p[campo]);
-      })
-      .join(" ");
+  // Cada dia ganha uma "fatia" de largura igual; dentro dela, uma coluna por série
+  var larguraGrupo = pontos.length > 0 ? areaLargura / pontos.length : areaLargura;
+  var espacamentoGrupo = Math.min(28, larguraGrupo * 0.18);
+  var larguraGrupoUtil = larguraGrupo - espacamentoGrupo;
+  var larguraColuna = Math.max(2, larguraGrupoUtil / series.length - 4);
+
+  function coordXGrupo(i) {
+    return margem.esq + i * larguraGrupo + espacamentoGrupo / 2;
   }
 
-  function gerarArea(campo) {
-    var linha = pontos
-      .map(function (p, i) {
-        return (i === 0 ? "M" : "L") + coordX(i) + "," + coordY(p[campo]);
-      })
-      .join(" ");
-    var ultimoX = coordX(pontos.length - 1);
-    var baseY = margem.topo + areaAltura;
-    return linha + " L" + ultimoX + "," + baseY + " L" + coordX(0) + "," + baseY + " Z";
-  }
-
-  var passoRotulo = Math.max(1, Math.ceil(pontos.length / 8));
-  var mostrarPontos = pontos.length <= 45;
+  var passoRotulo = Math.max(1, Math.ceil(pontos.length / 10));
 
   // Linhas de grade horizontais — 0%, 25%, 50%, 75%, 100% do eixo
   var linhasGrade = [0, 0.25, 0.5, 0.75, 1].map(function (fracao) {
     return { y: coordY(maxEixo * fracao), rotulo: Math.round(maxEixo * fracao) };
   });
+
+  var mostrarRotuloValor = pontos.length <= 20;
 
   return (
     <div>
@@ -581,12 +575,15 @@ function GraficoLinha({ serieDiaria }) {
         <defs>
           {series.map(function (s) {
             return (
-              <linearGradient key={s.chave} id={"gradiente-" + s.chave} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={s.cor} stopOpacity="0.35" />
-                <stop offset="100%" stopColor={s.cor} stopOpacity="0" />
+              <linearGradient key={s.chave} id={"col-gradiente-" + s.chave} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={s.cor} stopOpacity="1" />
+                <stop offset="100%" stopColor={s.cor} stopOpacity="0.55" />
               </linearGradient>
             );
           })}
+          <filter id="sombra-coluna" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.35" />
+          </filter>
         </defs>
 
         {/* Grade horizontal + rótulos do eixo Y */}
@@ -608,48 +605,55 @@ function GraficoLinha({ serieDiaria }) {
           );
         })}
 
-        {/* Áreas preenchidas (embaixo das linhas) */}
-        {series.map(function (s) {
-          return <path key={s.chave} d={gerarArea(s.chave)} fill={"url(#gradiente-" + s.chave + ")"} stroke="none" />;
-        })}
-
-        {/* Linhas */}
-        {series.map(function (s) {
+        {/* Colunas agrupadas por dia */}
+        {pontos.map(function (p, i) {
+          var xBase = coordXGrupo(i);
           return (
-            <path
-              key={s.chave}
-              d={gerarLinha(s.chave)}
-              fill="none"
-              stroke={s.cor}
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <g key={p.dia} filter="url(#sombra-coluna)">
+              {series.map(function (s, j) {
+                var valor = p[s.chave];
+                var yTopo = coordY(valor);
+                var alturaColuna = margem.topo + areaAltura - yTopo;
+                var x = xBase + j * (larguraColuna + 4);
+                return (
+                  <g key={s.chave}>
+                    <rect
+                      x={x}
+                      y={alturaColuna > 0 ? yTopo : margem.topo + areaAltura}
+                      width={larguraColuna}
+                      height={Math.max(alturaColuna, 0)}
+                      rx={Math.min(4, larguraColuna / 2)}
+                      fill={"url(#col-gradiente-" + s.chave + ")"}
+                    />
+                    {mostrarRotuloValor && valor > 0 && (
+                      <text
+                        x={x + larguraColuna / 2}
+                        y={yTopo - 6}
+                        fontSize="11"
+                        fill="#cbd5e1"
+                        textAnchor="middle"
+                      >
+                        {valor}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </g>
           );
         })}
-
-        {/* Pontos em cada dia (só se não tiver muitos dias, pra não poluir) */}
-        {mostrarPontos &&
-          series.map(function (s) {
-            return pontos.map(function (p, i) {
-              return (
-                <circle
-                  key={s.chave + "-" + p.dia}
-                  cx={coordX(i)}
-                  cy={coordY(p[s.chave])}
-                  r="4"
-                  fill="#0a0e1a"
-                  stroke={s.cor}
-                  strokeWidth="2.5"
-                />
-              );
-            });
-          })}
 
         {/* Rótulos do eixo X (datas) */}
         {pontos.map(function (p, i) {
           return i % passoRotulo === 0 ? (
-            <text key={p.dia} x={coordX(i)} y={altura - 10} fontSize="12" fill="#94a3b8" textAnchor="middle">
+            <text
+              key={p.dia}
+              x={coordXGrupo(i) + larguraGrupoUtil / 2}
+              y={altura - 10}
+              fontSize="12"
+              fill="#94a3b8"
+              textAnchor="middle"
+            >
               {p.dia.slice(5)}
             </text>
           ) : null;
