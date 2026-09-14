@@ -72,6 +72,8 @@ export default function Dashboard() {
 
   const [sites, setSites] = useState([]);
   const [siteSelecionado, setSiteSelecionado] = useState("");
+  const [secoesFechadas, setSecoesFechadas] = useState({});
+  const [buscaCliques, setBuscaCliques] = useState("");
   const [dataInicio, setDataInicio] = useState(
     new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   );
@@ -138,6 +140,35 @@ export default function Dashboard() {
   const origemAgrupada = stats ? agruparPorChave(stats.porOrigem, "utm_source") : {};
   const campanhaAgrupada = stats ? agruparPorChave(stats.porCampanha, "utm_campaign") : {};
   const criativoAgrupado = stats ? agruparPorChave(stats.porCriativo, "utm_content") : {};
+
+  var termoBusca = buscaCliques.trim().toLowerCase();
+  var cliquesPorTipoFiltrado =
+    stats && termoBusca
+      ? stats.cliquesPorTipo.filter(function (c) {
+          return nomeAmigavelEvento(c.tipo_evento).toLowerCase().indexOf(termoBusca) !== -1;
+        })
+      : stats
+      ? stats.cliquesPorTipo
+      : [];
+  var cliquesPorRotuloFiltrado =
+    stats && termoBusca
+      ? stats.cliquesPorRotulo.filter(function (c) {
+          return (
+            nomeAmigavelEvento(c.tipo_evento).toLowerCase().indexOf(termoBusca) !== -1 ||
+            (c.rotulo || "").toLowerCase().indexOf(termoBusca) !== -1
+          );
+        })
+      : stats
+      ? stats.cliquesPorRotulo
+      : [];
+
+  function alternarSecao(id) {
+    setSecoesFechadas(function (atual) {
+      var novo = Object.assign({}, atual);
+      novo[id] = !novo[id];
+      return novo;
+    });
+  }
 
   return (
     <div className="container">
@@ -251,58 +282,84 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="secao">
-                <h2>Visitas por dia</h2>
+              <Secao id="grafico" titulo="Visitas por dia" aberta={!secoesFechadas.grafico} aoAlternar={alternarSecao}>
                 <GraficoColunas serieDiaria={stats.serieDiaria} />
-              </div>
+              </Secao>
 
-              <div className="secao">
-                <h2>Cliques por tipo</h2>
-                <TabelaCliques cliquesPorTipo={stats.cliquesPorTipo} />
-              </div>
+              <Secao
+                id="cliques"
+                titulo="Cliques por tipo"
+                aberta={!secoesFechadas.cliques}
+                aoAlternar={alternarSecao}
+                extra={
+                  <input
+                    className="busca-cliques"
+                    type="text"
+                    placeholder="🔎 Filtrar por tipo ou botão..."
+                    value={buscaCliques}
+                    onChange={function (e) {
+                      setBuscaCliques(e.target.value);
+                    }}
+                  />
+                }
+              >
+                <TabelaCliques cliquesPorTipo={cliquesPorTipoFiltrado} />
+              </Secao>
 
-              {stats.cliquesPorRotulo && stats.cliquesPorRotulo.length > 0 && (
-                <div className="secao">
-                  <h2>Detalhamento por botão</h2>
-                  <TabelaRotulo cliquesPorRotulo={stats.cliquesPorRotulo} />
-                </div>
+              {cliquesPorRotuloFiltrado && cliquesPorRotuloFiltrado.length > 0 && (
+                <Secao id="rotulo" titulo="Detalhamento por botão" aberta={!secoesFechadas.rotulo} aoAlternar={alternarSecao}>
+                  <TabelaRotulo cliquesPorRotulo={cliquesPorRotuloFiltrado} />
+                </Secao>
               )}
 
-              <div className="secao">
-                <h2>Dispositivo</h2>
+              <Secao id="dispositivo" titulo="Dispositivo" aberta={!secoesFechadas.dispositivo} aoAlternar={alternarSecao}>
                 <TabelaDispositivo porDispositivo={stats.engajamento.porDispositivo} totalVisitas={visitas} />
-              </div>
+              </Secao>
 
-              <div className="secao">
-                <h2>Profundidade de rolagem</h2>
+              <Secao id="scroll" titulo="Profundidade de rolagem" aberta={!secoesFechadas.scroll} aoAlternar={alternarSecao}>
                 <TabelaScroll scrollProfundidade={stats.engajamento.scrollProfundidade} visitantesUnicos={stats.engajamento.visitantesUnicos} />
-              </div>
+              </Secao>
 
-              <div className="secao">
-                <h2>Por origem (utm_source)</h2>
+              <Secao id="origem" titulo="Por origem (utm_source)" aberta={!secoesFechadas.origem} aoAlternar={alternarSecao}>
                 <TabelaAgrupada dados={origemAgrupada} />
-              </div>
+              </Secao>
 
-              <div className="secao">
-                <h2>Por campanha (utm_campaign)</h2>
+              <Secao id="campanha" titulo="Por campanha (utm_campaign)" aberta={!secoesFechadas.campanha} aoAlternar={alternarSecao}>
                 <TabelaAgrupada dados={campanhaAgrupada} />
-              </div>
+              </Secao>
 
-              <div className="secao">
-                <h2>Por anúncio/criativo (utm_content)</h2>
+              <Secao id="criativo" titulo="Por anúncio/criativo (utm_content)" aberta={!secoesFechadas.criativo} aoAlternar={alternarSecao}>
                 <TabelaAgrupada dados={criativoAgrupado} />
-              </div>
+              </Secao>
 
               {stats.video && stats.video.plays.length > 0 && (
-                <div className="secao">
-                  <h2>Vídeo (VSL)</h2>
+                <Secao id="video" titulo="Vídeo (VSL)" aberta={!secoesFechadas.video} aoAlternar={alternarSecao}>
                   <SecaoVideo video={stats.video} />
-                </div>
+                </Secao>
               )}
             </>
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function Secao({ titulo, aberta, aoAlternar, id, extra, children }) {
+  return (
+    <div className="secao">
+      <div className="secao-cabecalho">
+        <h2
+          onClick={function () {
+            aoAlternar(id);
+          }}
+        >
+          {titulo}
+          <span className={"secao-seta" + (aberta ? "" : " fechada")}>▾</span>
+        </h2>
+        {extra}
+      </div>
+      {aberta && children}
     </div>
   );
 }

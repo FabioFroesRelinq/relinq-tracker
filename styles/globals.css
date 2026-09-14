@@ -207,11 +207,48 @@ body {
 .secao h2 {
   font-size: 1.15rem;
   font-weight: 700;
-  margin: 0 0 20px;
+  margin: 0;
   color: #f1f5f9;
   display: flex;
   align-items: center;
   gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.secao-cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.secao-seta {
+  font-size: 0.75rem;
+  color: #64748b;
+  transition: transform 0.15s;
+  margin-left: 2px;
+}
+
+.secao-seta.fechada {
+  transform: rotate(-90deg);
+}
+
+.busca-cliques {
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid #263042;
+  background: #0d1424;
+  color: #e5e7eb;
+  font-size: 0.9rem;
+  min-width: 240px;
+}
+
+.busca-cliques:focus {
+  outline: none;
+  border-color: #6366f1;
 }
 
 .secao h2::before {
