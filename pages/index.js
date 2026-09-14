@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import Relogio from "../components/Relogio";
 
 function ehClique(tipoEvento) {
   return tipoEvento.indexOf("clique_") === 0;
@@ -148,7 +149,9 @@ export default function Dashboard() {
           <button className="btn-sair" onClick={sair}>Sair</button>
         </div>
       </div>
-      <p className="atualizacao-automatica">🔄 Atualiza automaticamente a cada 10s</p>
+      <p className="atualizacao-automatica">
+        Atualiza automaticamente a cada 10s <Relogio />
+      </p>
 
       {sites.length === 0 ? (
         <p className="vazio">
@@ -206,31 +209,31 @@ export default function Dashboard() {
           {!carregando && stats && (
             <>
               <div className="cards">
-                <div className="card">
+                <div className="card" style={{ "--acento": "#6366f1" }}>
                   <div className="label">Visitas</div>
                   <div className="valor">{visitas}</div>
                 </div>
-                <div className="card">
+                <div className="card" style={{ "--acento": "#06b6d4" }}>
                   <div className="label">Visitantes únicos</div>
                   <div className="valor">{stats.engajamento.visitantesUnicos}</div>
                 </div>
-                <div className="card">
+                <div className="card" style={{ "--acento": "#f59e0b" }}>
                   <div className="label">Cliques (todos os tipos)</div>
                   <div className="valor">{cliquesTotais}</div>
                 </div>
-                <div className="card">
+                <div className="card" style={{ "--acento": "#22c55e" }}>
                   <div className="label">Conversões</div>
                   <div className="valor">{conversoes}</div>
                 </div>
-                <div className="card">
+                <div className="card" style={{ "--acento": "#22c55e" }}>
                   <div className="label">Taxa de conversão</div>
                   <div className="valor">{taxaConversao}%</div>
                 </div>
-                <div className="card">
+                <div className="card" style={{ "--acento": "#f43f5e" }}>
                   <div className="label">Taxa de rejeição</div>
                   <div className="valor">{stats.engajamento.taxaRejeicao}%</div>
                 </div>
-                <div className="card">
+                <div className="card" style={{ "--acento": "#a78bfa" }}>
                   <div className="label">Tempo médio na página</div>
                   <div className="valor">
                     {stats.engajamento.tempoMedioSegundos !== null
@@ -483,6 +486,18 @@ function SecaoVideo({ video }) {
   });
 }
 
+function arredondarParaCima(valor) {
+  if (valor <= 0) return 1;
+  var magnitude = Math.pow(10, Math.floor(Math.log10(valor)));
+  var normalizado = valor / magnitude;
+  var passo;
+  if (normalizado <= 1) passo = 1;
+  else if (normalizado <= 2) passo = 2;
+  else if (normalizado <= 5) passo = 5;
+  else passo = 10;
+  return passo * magnitude;
+}
+
 function GraficoLinha({ serieDiaria }) {
   if (!serieDiaria || serieDiaria.length === 0) {
     return <p className="vazio">Sem dados nesse período.</p>;
@@ -503,18 +518,25 @@ function GraficoLinha({ serieDiaria }) {
     return porDia[d];
   });
 
-  var largura = 900;
-  var altura = 240;
-  var margem = { topo: 20, baixo: 30, esq: 40, dir: 20 };
+  var series = [
+    { chave: "visita", cor: "#6366f1", nome: "Visitas" },
+    { chave: "cliques", cor: "#f59e0b", nome: "Cliques" },
+    { chave: "conversao", cor: "#22c55e", nome: "Conversões" },
+  ];
+
+  var largura = 1200;
+  var altura = 340;
+  var margem = { topo: 20, baixo: 36, esq: 48, dir: 20 };
   var areaLargura = largura - margem.esq - margem.dir;
   var areaAltura = altura - margem.topo - margem.baixo;
 
-  var maxValor = Math.max(
+  var maiorValor = Math.max(
     1,
     ...pontos.map(function (p) {
       return Math.max(p.visita, p.cliques, p.conversao);
     })
   );
+  var maxEixo = arredondarParaCima(maiorValor);
 
   function coordX(i) {
     return pontos.length <= 1
@@ -523,7 +545,7 @@ function GraficoLinha({ serieDiaria }) {
   }
 
   function coordY(valor) {
-    return margem.topo + areaAltura - (valor / maxValor) * areaAltura;
+    return margem.topo + areaAltura - (valor / maxEixo) * areaAltura;
   }
 
   function gerarLinha(campo) {
@@ -534,34 +556,115 @@ function GraficoLinha({ serieDiaria }) {
       .join(" ");
   }
 
-  var passoRotulo = Math.max(1, Math.ceil(pontos.length / 6));
+  function gerarArea(campo) {
+    var linha = pontos
+      .map(function (p, i) {
+        return (i === 0 ? "M" : "L") + coordX(i) + "," + coordY(p[campo]);
+      })
+      .join(" ");
+    var ultimoX = coordX(pontos.length - 1);
+    var baseY = margem.topo + areaAltura;
+    return linha + " L" + ultimoX + "," + baseY + " L" + coordX(0) + "," + baseY + " Z";
+  }
+
+  var passoRotulo = Math.max(1, Math.ceil(pontos.length / 8));
+  var mostrarPontos = pontos.length <= 45;
+
+  // Linhas de grade horizontais — 0%, 25%, 50%, 75%, 100% do eixo
+  var linhasGrade = [0, 0.25, 0.5, 0.75, 1].map(function (fracao) {
+    return { y: coordY(maxEixo * fracao), rotulo: Math.round(maxEixo * fracao) };
+  });
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <svg viewBox={"0 0 " + largura + " " + altura} style={{ width: "100%", maxWidth: largura }}>
-        <line
-          x1={margem.esq}
-          y1={margem.topo + areaAltura}
-          x2={largura - margem.dir}
-          y2={margem.topo + areaAltura}
-          stroke="#e5e7eb"
-        />
-        <path d={gerarLinha("visita")} fill="none" stroke="#4f46e5" strokeWidth="2" />
-        <path d={gerarLinha("cliques")} fill="none" stroke="#f59e0b" strokeWidth="2" />
-        <path d={gerarLinha("conversao")} fill="none" stroke="#16a34a" strokeWidth="2" />
+    <div>
+      <svg viewBox={"0 0 " + largura + " " + altura} style={{ width: "100%", height: "auto", display: "block" }}>
+        <defs>
+          {series.map(function (s) {
+            return (
+              <linearGradient key={s.chave} id={"gradiente-" + s.chave} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={s.cor} stopOpacity="0.35" />
+                <stop offset="100%" stopColor={s.cor} stopOpacity="0" />
+              </linearGradient>
+            );
+          })}
+        </defs>
 
+        {/* Grade horizontal + rótulos do eixo Y */}
+        {linhasGrade.map(function (linha, i) {
+          return (
+            <g key={i}>
+              <line
+                x1={margem.esq}
+                y1={linha.y}
+                x2={largura - margem.dir}
+                y2={linha.y}
+                stroke="rgba(255,255,255,0.07)"
+                strokeWidth="1"
+              />
+              <text x={margem.esq - 10} y={linha.y + 4} fontSize="12" fill="#64748b" textAnchor="end">
+                {linha.rotulo}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Áreas preenchidas (embaixo das linhas) */}
+        {series.map(function (s) {
+          return <path key={s.chave} d={gerarArea(s.chave)} fill={"url(#gradiente-" + s.chave + ")"} stroke="none" />;
+        })}
+
+        {/* Linhas */}
+        {series.map(function (s) {
+          return (
+            <path
+              key={s.chave}
+              d={gerarLinha(s.chave)}
+              fill="none"
+              stroke={s.cor}
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          );
+        })}
+
+        {/* Pontos em cada dia (só se não tiver muitos dias, pra não poluir) */}
+        {mostrarPontos &&
+          series.map(function (s) {
+            return pontos.map(function (p, i) {
+              return (
+                <circle
+                  key={s.chave + "-" + p.dia}
+                  cx={coordX(i)}
+                  cy={coordY(p[s.chave])}
+                  r="4"
+                  fill="#0a0e1a"
+                  stroke={s.cor}
+                  strokeWidth="2.5"
+                />
+              );
+            });
+          })}
+
+        {/* Rótulos do eixo X (datas) */}
         {pontos.map(function (p, i) {
           return i % passoRotulo === 0 ? (
-            <text key={p.dia} x={coordX(i)} y={altura - 8} fontSize="10" fill="#6b7280" textAnchor="middle">
+            <text key={p.dia} x={coordX(i)} y={altura - 10} fontSize="12" fill="#94a3b8" textAnchor="middle">
               {p.dia.slice(5)}
             </text>
           ) : null;
         })}
       </svg>
-      <div style={{ display: "flex", gap: 16, fontSize: 13, marginTop: 8 }}>
-        <span style={{ color: "#4f46e5" }}>● Visitas</span>
-        <span style={{ color: "#f59e0b" }}>● Cliques</span>
-        <span style={{ color: "#16a34a" }}>● Conversões</span>
+
+      <div className="grafico-legenda">
+        {series.map(function (s) {
+          return (
+            <span key={s.chave}>
+              <span className="ponto" style={{ background: s.cor }} />
+              {s.nome}
+            </span>
+          );
+        })}
       </div>
     </div>
   );

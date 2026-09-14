@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import Relogio from "../components/Relogio";
 
 function formatarData(date) {
   return date.toISOString().slice(0, 10);
@@ -63,7 +64,9 @@ export default function VisaoGeral() {
           <button className="btn-sair" onClick={sair}>Sair</button>
         </div>
       </div>
-      <p className="atualizacao-automatica">🔄 Atualiza automaticamente a cada 10s</p>
+      <p className="atualizacao-automatica">
+        Atualiza automaticamente a cada 10s <Relogio />
+      </p>
 
       <div className="filtros">
         <input type="date" value={dataInicio} onChange={function (e) { setDataInicio(e.target.value); }} />
