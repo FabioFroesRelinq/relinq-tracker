@@ -320,7 +320,7 @@ export default function Dashboard() {
               )}
 
               <Secao id="dispositivo" titulo="Dispositivo" aberta={!secoesFechadas.dispositivo} aoAlternar={alternarSecao}>
-                <TabelaDispositivo porDispositivo={stats.engajamento.porDispositivo} totalVisitas={visitas} />
+                <GraficoPizza porDispositivo={stats.engajamento.porDispositivo} totalVisitas={visitas} />
               </Secao>
 
               <Secao id="scroll" titulo="Profundidade de rolagem" aberta={!secoesFechadas.scroll} aoAlternar={alternarSecao}>
@@ -431,33 +431,84 @@ function TabelaRotulo({ cliquesPorRotulo }) {
   );
 }
 
-function TabelaDispositivo({ porDispositivo, totalVisitas }) {
+function GraficoPizza({ porDispositivo, totalVisitas }) {
   if (!porDispositivo || porDispositivo.length === 0) {
     return <p className="vazio">Sem dados nesse período.</p>;
   }
 
+  var cores = {
+    desktop: "#6366f1",
+    mobile: "#06b6d4",
+    tablet: "#f59e0b",
+    desconhecido: "#64748b",
+  };
+
+  var total = porDispositivo.reduce(function (soma, d) {
+    return soma + d.total;
+  }, 0);
+
+  var raio = 80;
+  var raioInterno = 50;
+  var centro = 100;
+  var circunferencia = 2 * Math.PI * raio;
+
+  var acumulado = 0;
+  var fatias = porDispositivo.map(function (d) {
+    var fracao = total > 0 ? d.total / total : 0;
+    var fatia = {
+      dispositivo: d.dispositivo,
+      total: d.total,
+      pct: total > 0 ? ((d.total / total) * 100).toFixed(1) : "0.0",
+      cor: cores[d.dispositivo] || "#64748b",
+      offset: acumulado,
+      comprimento: fracao * circunferencia,
+    };
+    acumulado += fracao * circunferencia;
+    return fatia;
+  });
+
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>Dispositivo</th>
-          <th>Visitas</th>
-          <th>%</th>
-        </tr>
-      </thead>
-      <tbody>
-        {porDispositivo.map(function (d) {
-          var pct = totalVisitas > 0 ? ((d.total / totalVisitas) * 100).toFixed(1) : "0.0";
+    <div className="pizza-wrap">
+      <svg viewBox="0 0 200 200" className="pizza-svg">
+        <g transform={"rotate(-90 " + centro + " " + centro + ")"}>
+          {fatias.map(function (f) {
+            return (
+              <circle
+                key={f.dispositivo}
+                cx={centro}
+                cy={centro}
+                r={raio}
+                fill="none"
+                stroke={f.cor}
+                strokeWidth={raio - raioInterno}
+                strokeDasharray={f.comprimento + " " + (circunferencia - f.comprimento)}
+                strokeDashoffset={-f.offset}
+              />
+            );
+          })}
+        </g>
+        <text x={centro} y={centro - 6} textAnchor="middle" fontSize="26" fontWeight="800" fill="#fff">
+          {totalVisitas}
+        </text>
+        <text x={centro} y={centro + 16} textAnchor="middle" fontSize="12" fill="#94a3b8">
+          visitas
+        </text>
+      </svg>
+
+      <div className="pizza-legenda">
+        {fatias.map(function (f) {
           return (
-            <tr key={d.dispositivo}>
-              <td>{nomeAmigavelDispositivo(d.dispositivo)}</td>
-              <td>{d.total}</td>
-              <td>{pct}%</td>
-            </tr>
+            <div key={f.dispositivo} className="pizza-legenda-item">
+              <span className="ponto" style={{ background: f.cor }} />
+              <span className="pizza-legenda-nome">{nomeAmigavelDispositivo(f.dispositivo)}</span>
+              <span className="pizza-legenda-valor">
+                {f.total} <span className="pizza-legenda-pct">({f.pct}%)</span>
+              </span>
+            </div>
           );
         })}
-      </tbody>
-    </table>
+      </div>
+    </div>
   );
 }
 

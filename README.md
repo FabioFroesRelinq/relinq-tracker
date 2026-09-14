@@ -1,6 +1,16 @@
 # Relinq Tracker
 
-Sistema próprio de rastreamento de funil (visita → clique → conversão) para as LPs da Relinq, com painel simples para o time de marketing.
+Sistema próprio de rastreamento de funil (visita → clique → conversão) para
+as LPs e funis da Relinq, com painel em tempo real para o time de
+marketing. Um único snippet (`tracker.js`) detecta sozinho a maior parte
+dos eventos importantes — sem precisar marcar nada manualmente no HTML de
+cada página.
+
+**Produção:** painel hospedado na Vercel, banco MySQL na Hostinger (via
+MySQL remoto). Deploy automático: todo `git push` na branch `main` gera
+uma nova publicação.
+
+---
 
 ## Como rodar localmente
 
@@ -9,116 +19,216 @@ Sistema próprio de rastreamento de funil (visita → clique → conversão) par
    npm install
    ```
 
-2. Criar o banco de dados:
+2. Criar o banco de dados (rode os três arquivos, na ordem, se for um
+   banco novo — se já tiver rodado os anteriores antes, só falta o mais
+   recente):
    ```
    mysql -u root -p < db/schema.sql
+   mysql -u root -p relinq_tracker_db < db/migration-2.sql
+   mysql -u root -p relinq_tracker_db < db/migration-3.sql
    ```
+   Na Hostinger (via phpMyAdmin), é o mesmo conteúdo, só sem os comandos
+   `CREATE DATABASE`/`USE` — cole direto com o banco certo já selecionado.
 
-3. Copiar `.env.example` para `.env.local` e preencher com os dados do seu MySQL:
+3. Copiar `.env.example` para `.env.local` e preencher:
    ```
    cp .env.example .env.local
    ```
+   Além dos dados do MySQL (`DB_HOST`, `DB_PORT`, `DB_USER`,
+   `DB_PASSWORD`, `DB_NAME`), preencha também o login do painel:
+   - `PAINEL_USER` / `PAINEL_PASSWORD` — credencial compartilhada do time
+   - `SESSION_SECRET` — uma string aleatória grande, gerada com
+     `openssl rand -hex 32`
 
 4. Rodar o projeto:
    ```
    npm run dev
    ```
 
-5. Acessar `http://localhost:3000` — painel principal
-   Acessar `http://localhost:3000/sites` — cadastro de LPs
+5. Acessar `http://localhost:3000` — pede login, depois abre o painel
+   principal. `/sites` cadastra LPs novas. `/visao-geral` compara todas
+   as LPs lado a lado.
 
-## Como adicionar uma nova LP
+---
 
-1. Vá em **"+ Cadastrar LP"** no painel e cadastre o nome (e domínio, opcional). Isso gera um `slug` único (ex: `relinq-beauty`).
+## Como adicionar uma LP nova
 
-2. Cole o snippet no `<head>` (ou antes do `</body>`) da LP, usando o slug gerado:
+1. No painel, vá em **"+ Cadastrar LP"** e registre o nome (e domínio,
+   opcional). Isso gera um `slug` único (ex: `relinq-beauty`).
+
+2. Cole essa única linha antes do `</body>` da LP:
    ```html
    <script src="https://SEU-DOMINIO/tracker.js" data-site="relinq-beauty"></script>
    ```
-   O evento de `visita` é disparado automaticamente ao carregar a página, já capturando os parâmetros UTM da URL (`utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`).
 
-3. Marque os eventos importantes da LP manualmente, chamando `relinqTrack(nome_do_evento)`:
-   ```html
-   <a href="https://wa.me/5511999999999" onclick="relinqTrack('clique_whatsapp')">
-     Falar no WhatsApp
-   </a>
-   ```
-   Para marcar uma conversão (ex: envio de formulário):
-   ```html
-   <script>
-     document.getElementById('form-cadastro').addEventListener('submit', function () {
-       relinqTrack('conversao');
-     });
-   </script>
-   ```
+**Só isso.** Nenhum outro código é necessário — o script sozinho já
+captura visita, UTMs, cliques, vídeo e mais (ver seções abaixo). A LP
+aparece no painel assim que o primeiro evento chegar.
 
-4. A LP aparece automaticamente no painel assim que o primeiro evento chegar.
+---
 
-**Se você já tinha o banco criado antes dessa atualização**, rode a migração pra adicionar as colunas novas:
-```
-mysql -u root -p relinq_tracker_db < db/migration-2.sql
-```
-(no Windows/PowerShell: `Get-Content db/migration-2.sql | mysql -u root -p relinq_tracker_db`)
+## O que é automático (zero código extra na LP)
 
-## Tipos de clique — cada CTA separado
+Assim que o snippet acima está instalado, o tracker já captura sozinho:
 
-Qualquer evento cujo nome comece com `clique_` vira um tipo de clique separado no painel, contado à parte. Use nomes diferentes pra cada tipo de botão da LP:
+- **Visita** — com os parâmetros UTM da URL (`utm_source`, `utm_medium`,
+  `utm_campaign`, `utm_content`, `utm_term`)
+- **Visitante único** — um ID anônimo salvo no navegador (`localStorage`),
+  então recarregar a página não conta como visitante novo
+- **Dispositivo** — celular, tablet ou computador
+- **Profundidade de rolagem** — marcos de 25%, 50%, 75% e 100%
+- **Tempo na página** — segundos até a pessoa sair ou trocar de aba
+- **Taxa de rejeição** — % de visitantes que só viram a página e não
+  clicaram em nada nem converteram
+
+### Cliques em CTAs — detectados sozinhos
+
+Qualquer `<a>` ou `<button>` que aponte pra um destino conhecido (WhatsApp,
+`tel:`, `mailto:`, App Store, Google Play, Instagram, Facebook, LinkedIn,
+TikTok) ou cuja classe CSS contenha `cta`, `btn`, `button` ou `pricing` já
+é trackeado automaticamente — sem precisar de `onclick` nem de nenhuma
+marcação. O nome do evento é escolhido sozinho (ex: `clique_whatsapp`,
+`clique_app_store`); pra outros botões, usa um nome derivado do texto do
+botão (ex: `clique_cta_comecar_agora`).
+
+**Qual botão específico foi clicado** (ex: qual plano — Grátis, Essential,
+Pro) também é detectado automaticamente: o tracker sobe pelos elementos-pai
+a partir do botão clicado e usa o título (`h1`–`h6`) do card mais próximo
+como "rótulo" — sem separar da contagem agregada do tipo de evento. Se por
+algum motivo a detecção pegar o título errado, dá pra forçar manualmente
+com `data-plano="Nome"` num elemento em volta do botão, mas isso raramente
+é necessário.
+
+### Vídeo — YouTube e `<video>` nativo, ambos automáticos
+
+- **YouTube:** qualquer iframe do YouTube na página é detectado sozinho —
+  mesmo que só seja criado depois (facades que carregam o player ao
+  clicar). Dispara `video_play`, `video_progress` (a cada 10%),
+  `video_pause` e `video_complete`.
+- **`<video>` nativo (VSL hospedada na própria LP):** precisa de uma linha
+  a mais, conectando o tracker ao elemento:
+  ```html
+  <video id="vsl" src="video-vendas.mp4" controls></video>
+  <script src="https://SEU-DOMINIO/tracker.js" data-site="relinq-beauty"></script>
+  <script>
+    relinqTrackVideo(document.getElementById('vsl'), 'vsl-principal');
+  </script>
+  ```
+  Se a LP tiver mais de um vídeo nativo, chama `relinqTrackVideo` de novo
+  pra cada um, com um `video_id` diferente.
+
+No painel, cada vídeo (YouTube ou nativo) aparece junto, com total de
+plays, taxa de conclusão, duração média assistida e a curva de retenção
+por marco de 10%.
+
+---
+
+## Eventos manuais (quando o automático não é suficiente)
+
+Pra marcar algo que o automático não cobre, chame `relinqTrack` direto no
+HTML ou JS da própria LP:
 
 ```html
-<a href="https://wa.me/..." onclick="relinqTrack('clique_whatsapp')">Falar no WhatsApp</a>
-<button onclick="relinqTrack('clique_cta')">Quero começar agora</button>
-<button onclick="relinqTrack('clique_checkout')">Finalizar compra</button>
+<button onclick="relinqTrack('conversao')">Finalizar compra</button>
 ```
 
-No painel, a seção "Cliques por tipo" mostra o total de cada um separadamente. Use `relinqTrack('conversao')` só pra marcar a conversão de verdade (ex: pagamento confirmado, cadastro concluído) — isso continua contando à parte, nos cards de topo.
-
-## Métricas de engajamento (automáticas, sem precisar mexer na LP)
-
-Assim que o snippet é instalado, o tracker já captura sozinho:
-
-- **Visitantes únicos** — um ID anônimo é salvo no navegador (`localStorage`), então recarregar a página não conta como visitante novo
-- **Dispositivo** — classifica cada visita como celular, tablet ou computador
-- **Profundidade de rolagem** — marcos de 25%, 50%, 75% e 100% da página rolada
-- **Tempo na página** — quantos segundos a pessoa ficou antes de sair ou trocar de aba
-- **Taxa de rejeição** — % de visitantes que só viram a página e não clicaram em nada
-
-Nenhuma dessas precisa de código adicional na LP — já vem junto do snippet padrão.
-
-## Rastreando a VSL (vídeo hospedado na LP)
-
-Se a LP tem um vídeo (`<video>`) hospedado direto nela, basta conectar o tracker a esse elemento:
-
-```html
-<video id="vsl" src="video-vendas.mp4" controls></video>
-
-<script src="https://SEU-DOMINIO/tracker.js" data-site="relinq-beauty"></script>
-<script>
-  relinqTrackVideo(document.getElementById('vsl'), 'vsl-principal');
-</script>
+Ou de dentro de um handler JS:
+```js
+document.getElementById('form-cadastro').addEventListener('submit', function () {
+  relinqTrack('conversao');
+});
 ```
 
-A partir daí, o tracker passa a capturar sozinho:
-- **`video_play`** — quando o vídeo começa a tocar (primeira vez)
-- **`video_progress`** — a cada marco de 10% assistido (10%, 20%, ... 100%) — isso monta a **curva de retenção**, mostrando exatamente em que ponto a audiência abandona o vídeo
-- **`video_pause`** — quando o usuário pausa, com os segundos assistidos até ali
-- **`video_complete`** — quando o vídeo termina, com a duração total
+### Convenções de nome — importantes pro painel entender o evento
 
-No painel, cada vídeo cadastrado aparece com: total de plays, taxa de conclusão, duração média assistida e a tabela de retenção por marco. Se a LP tiver mais de um vídeo, é só chamar `relinqTrackVideo` de novo pra cada um, passando um `video_id` diferente.
+- **`clique_algumacoisa`** — qualquer evento começando com `clique_` vira
+  um tipo de clique separado na seção "Cliques por tipo". Normalmente nem
+  precisa disparar manual, já que a maioria já é auto-detectada.
+- **`conversao`** — reserve **só pra venda de verdade** (pagamento
+  confirmado, cadastro pago concluído). É o que calcula a "taxa de
+  conversão" nos cards do topo.
+- **`quiz_finalizado`** (ou nome parecido) — pra marcos do meio do funil
+  que não são a venda em si (ex: quiz respondido até o fim, lead
+  capturado). Aparece como um card separado no painel ("Quizzes
+  finalizados") quando presente, sem misturar com a conversão real.
+
+---
+
+## Ferramentas de terceiros (quiz builders, checkout, etc.)
+
+Quando a LP não é código seu — só uma ferramenta com um campo tipo
+"Head", "Pixel" ou "Scripts customizados" (ex: **InLead**, Typeform,
+checkouts prontos) — dois recursos cobrem o funil sem precisar de código:
+
+1. **Cliques continuam sendo auto-detectados** normalmente, contanto que
+   os botões da ferramenta sejam `<a>` ou `<button>` (praticamente sempre
+   são).
+
+2. **Evento automático por parâmetro de URL** — pra marcar uma etapa
+   específica (ex: quiz finalizado, lead capturado) numa página de
+   destino que a própria ferramenta permite configurar (ex: a "página de
+   obrigado" depois do formulário), configure essa URL de destino com:
+   ```
+   https://sua-pagina-de-obrigado.com/?relinq_evento=quiz_finalizado
+   ```
+   O tracker detecta esse parâmetro sozinho ao carregar a página e
+   dispara o evento — zero código na ferramenta. Aceita também
+   `&relinq_rotulo=algo`, se quiser rotular esse evento específico.
+
+**Instalando na InLead:** abra o funil → aba **Configurações** →
+**Pixel/Scripts** → cole a tag do tracker no campo **Head** → **Concluído**
+→ **Publicar**.
+
+---
+
+## Usando o painel
+
+- **Seletor de LP** (topo): escolhe uma LP específica, ou **"📊 Todas as
+  LPs juntas"** pra ver tudo somado de uma vez.
+- **Atualização automática**: os números se atualizam sozinhos a cada 10
+  segundos, sem precisar dar F5 — bom pra deixar o painel aberto numa TV.
+  O clique/evento em si já é gravado instantaneamente; o intervalo de 10s
+  é só sobre quando a *tela* vai buscar de novo os dados atualizados.
+- **Filtro de datas**: período customizado ou atalhos (Hoje, 7 dias, 30
+  dias).
+- **Gráfico de colunas**: Visitas / Cliques / Conversões por dia.
+- **Seções recolhíveis**: clique no título de qualquer seção pra
+  esconder/mostrar (útil conforme a lista de tipos de clique cresce).
+- **Busca em "Cliques por tipo"**: filtra tanto essa tabela quanto o
+  "Detalhamento por botão" pelo nome do evento ou do rótulo.
+- **`/visao-geral`**: compara todas as LPs cadastradas lado a lado, uma
+  linha por LP.
+
+---
 
 ## Estrutura do projeto
 
 ```
 relinq-tracker/
-  db/schema.sql        -> schema do MySQL (tabelas sites e events)
-  lib/db.js             -> conexão com o MySQL
-  pages/api/track.js    -> recebe os eventos do tracker.js
-  pages/api/sites.js    -> cadastra/lista as LPs
-  pages/api/stats.js    -> calcula as métricas do painel
-  pages/index.js         -> painel principal (visitas, cliques, conversões, UTMs)
-  pages/sites.js          -> tela de cadastro de LPs
-  public/tracker.js       -> snippet a ser instalado nas LPs
+  db/schema.sql          -> schema inicial do MySQL (tabelas sites e events)
+  db/migration-2.sql     -> adiciona colunas de engajamento (visitor_id, dispositivo, etc.)
+  db/migration-3.sql     -> adiciona a coluna "rotulo" (qual botão específico)
+  lib/db.js              -> conexão com o MySQL
+  lib/auth.js             -> sessão de login (Node.js — usado pelas rotas de API)
+  lib/auth-edge.js         -> mesma verificação de sessão, versão Edge Runtime (middleware)
+  middleware.js             -> protege o painel e as APIs internas, exige login
+  components/Relogio.js      -> relógio ao vivo no cabeçalho do painel
+  pages/api/track.js          -> recebe os eventos do tracker.js (pública, sem login)
+  pages/api/sites.js            -> cadastra/lista as LPs (protegida)
+  pages/api/stats.js              -> calcula as métricas do painel (protegida)
+  pages/api/login.js                -> confere usuário/senha, grava cookie de sessão
+  pages/api/logout.js                 -> limpa o cookie de sessão
+  pages/login.js                        -> tela de login
+  pages/index.js                          -> painel principal (visitas, cliques, conversões, UTMs, vídeo)
+  pages/sites.js                            -> tela de cadastro de LPs
+  pages/visao-geral.js                        -> comparativo entre todas as LPs
+  public/tracker.js                             -> snippet único a ser instalado em qualquer LP
 ```
+
+---
 
 ## Segurança e uso de dados
 
-Conforme a política de uso da conta Claude da Relinq, nenhum dado real de cliente, credencial ou informação sensível deve ser usado nos testes/exemplos deste projeto — usar sempre dados fictícios.
+Conforme a política de uso da conta Claude da Relinq, nenhum dado real de
+cliente, credencial ou informação sensível deve ser usado nos
+testes/exemplos deste projeto — usar sempre dados fictícios.
