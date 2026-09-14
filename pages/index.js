@@ -184,6 +184,7 @@ export default function Dashboard() {
         </div>
         <div className="nav">
           <Link href="/visao-geral">Visão geral</Link>
+          <Link href="/jornada">Jornada do visitante</Link>
           <Link href="/sites">+ Cadastrar LP</Link>
           <button className="btn-sair" onClick={sair}>Sair</button>
         </div>
@@ -289,9 +290,15 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <Secao id="grafico" titulo="Visitas por dia" aberta={!secoesFechadas.grafico} aoAlternar={alternarSecao}>
-                <GraficoColunas serieDiaria={stats.serieDiaria} />
-              </Secao>
+              <div className="graficos-topo">
+                <Secao id="grafico" titulo="Visitas por dia" aberta={!secoesFechadas.grafico} aoAlternar={alternarSecao}>
+                  <GraficoColunas serieDiaria={stats.serieDiaria} />
+                </Secao>
+
+                <Secao id="dispositivo" titulo="Dispositivo" aberta={!secoesFechadas.dispositivo} aoAlternar={alternarSecao}>
+                  <GraficoPizza porDispositivo={stats.engajamento.porDispositivo} totalVisitas={visitas} />
+                </Secao>
+              </div>
 
               <Secao
                 id="cliques"
@@ -318,10 +325,6 @@ export default function Dashboard() {
                   <TabelaRotulo cliquesPorRotulo={cliquesPorRotuloFiltrado} />
                 </Secao>
               )}
-
-              <Secao id="dispositivo" titulo="Dispositivo" aberta={!secoesFechadas.dispositivo} aoAlternar={alternarSecao}>
-                <GraficoPizza porDispositivo={stats.engajamento.porDispositivo} totalVisitas={visitas} />
-              </Secao>
 
               <Secao id="scroll" titulo="Profundidade de rolagem" aberta={!secoesFechadas.scroll} aoAlternar={alternarSecao}>
                 <TabelaScroll scrollProfundidade={stats.engajamento.scrollProfundidade} visitantesUnicos={stats.engajamento.visitantesUnicos} />

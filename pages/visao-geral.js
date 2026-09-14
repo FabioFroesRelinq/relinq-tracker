@@ -68,6 +68,7 @@ export default function VisaoGeral() {
         </div>
         <div className="nav">
           <Link href="/">← Painel por LP</Link>
+          <Link href="/jornada">Jornada do visitante</Link>
           <button className="btn-sair" onClick={sair}>Sair</button>
         </div>
       </div>

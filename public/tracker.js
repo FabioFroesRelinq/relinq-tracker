@@ -64,16 +64,56 @@
   // --- Visitante anônimo (persistente, pra contar visitantes únicos) ---
   var CHAVE_VISITOR = "relinq_visitor_id";
   var visitorId = null;
+
+  // Se a pessoa chegou com ?relinq_visitor=... na URL (porque veio de outro
+  // domínio que já leva esse mesmo tracker instalado — ex: saiu do quiz e
+  // entrou na página de vendas), adota esse ID em vez de gerar um novo.
+  // Isso é o que permite seguir a mesma pessoa de um domínio pro outro.
+  var visitorDaUrl = new URLSearchParams(window.location.search).get("relinq_visitor");
+
   try {
-    visitorId = localStorage.getItem(CHAVE_VISITOR);
-    if (!visitorId) {
-      visitorId = "v_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+    if (visitorDaUrl) {
+      visitorId = visitorDaUrl;
       localStorage.setItem(CHAVE_VISITOR, visitorId);
+    } else {
+      visitorId = localStorage.getItem(CHAVE_VISITOR);
+      if (!visitorId) {
+        visitorId = "v_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem(CHAVE_VISITOR, visitorId);
+      }
     }
   } catch (e) {
     // localStorage pode estar bloqueado (modo privado, etc.) — segue sem persistir
-    visitorId = "v_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+    visitorId = visitorDaUrl || "v_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
   }
+
+  // --- Propaga o mesmo visitor_id pra links que saem pra OUTRO domínio ---
+  // Sem isso, ao clicar num link pra outro site (ex: quiz -> página de
+  // vendas em domínio diferente), o próximo domínio geraria um visitor_id
+  // novo, e a jornada da pessoa entre os dois se perderia. Isso reaplica
+  // periodicamente pra pegar links que aparecem depois (SPA, quiz builders
+  // que montam a página aos poucos, etc.)
+  (function propagarVisitorEntreDominios() {
+    function marcarLinks() {
+      var links = document.getElementsByTagName("a");
+      for (var i = 0; i < links.length; i++) {
+        var href = links[i].getAttribute("href");
+        if (!href || href.indexOf("#") === 0 || href.toLowerCase().indexOf("javascript:") === 0) continue;
+        try {
+          var url = new URL(href, window.location.href);
+          if (url.protocol !== "http:" && url.protocol !== "https:") continue;
+          if (url.hostname === window.location.hostname) continue; // mesmo domínio: localStorage já resolve sozinho
+          if (url.searchParams.get("relinq_visitor") === visitorId) continue; // já marcado
+          url.searchParams.set("relinq_visitor", visitorId);
+          links[i].setAttribute("href", url.toString());
+        } catch (e) {
+          // href inválido ou relativo estranho — ignora esse link
+        }
+      }
+    }
+    marcarLinks();
+    setInterval(marcarLinks, 1000);
+  })();
 
   // --- Dispositivo (heurística simples via user-agent) ---
   function detectarDispositivo() {

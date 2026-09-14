@@ -525,6 +525,24 @@ tbody tr:last-child td {
   font-weight: 400;
 }
 
+.graficos-topo {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 28px;
+}
+
+.graficos-topo .secao {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .graficos-topo {
+    grid-template-columns: 1fr;
+  }
+}
+
 .grafico-legenda {
   display: flex;
   gap: 22px;
