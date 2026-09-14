@@ -29,6 +29,25 @@
  * Em algum caso raro onde a detecção automática pegar o título errado,
  * dá pra forçar manualmente com data-plano="Nome" num elemento em volta
  * do botão — mas isso é só um ajuste fino opcional, não é necessário.
+ *
+ * FERRAMENTAS DE TERCEIROS (ex: quiz builders como InLead, checkouts, etc.)
+ * Quando você não tem acesso ao código da página — só a um campo tipo
+ * "Head/Pixel/Scripts" pra colar essa mesma tag de script — dois recursos
+ * ajudam a cobrir o funil sem precisar de código:
+ *
+ * 1) Cliques continuam sendo auto-detectados normalmente (respostas do
+ *    quiz, botões de avançar, etc.), contanto que sejam <a> ou <button>.
+ *
+ * 2) Pra marcar uma etapa específica (ex: "quiz finalizado", "lead
+ *    capturado") numa página de destino que você configura na própria
+ *    ferramenta (ex: a "página de obrigado" depois do quiz/formulário),
+ *    coloca esse parâmetro na URL de destino configurada na ferramenta:
+ *      https://sua-pagina.com/obrigado?relinq_evento=quiz_finalizado
+ *    O tracker detecta esse parâmetro sozinho ao carregar a página e
+ *    dispara o evento — sem precisar editar nada no código da ferramenta.
+ *    Também aceita &relinq_rotulo=algo, se quiser rotular esse evento.
+ *    Reserve o evento "conversao" pra venda de verdade, não pra etapas
+ *    intermediárias do funil como essa.
  */
 (function () {
   var scriptTag = document.currentScript;
@@ -507,6 +526,26 @@
   // Expõe funções globais pra disparar eventos manuais no HTML da LP
   window.relinqTrack = enviar;
   window.relinqTrackVideo = relinqTrackVideo;
+
+  // --- Evento automático via parâmetro na URL ---
+  // Útil pra ferramentas de terceiros (quiz builders, checkout, etc.) onde
+  // você não tem acesso ao código da página, mas consegue configurar pra
+  // onde ela redireciona depois de uma ação (ex: "página de obrigado" após
+  // capturar um lead). Configurando essa página de destino com
+  // ?relinq_evento=conversao (ou qualquer nome de evento) na URL, o evento
+  // é disparado sozinho ao carregar, sem precisar de nenhum código extra.
+  // Também aceita ?relinq_rotulo=algo pra rotular esse evento.
+  (function eventoViaUrl() {
+    var params = new URLSearchParams(window.location.search);
+    var evento = params.get("relinq_evento");
+    if (!evento) return;
+    var rotulo = params.get("relinq_rotulo");
+    if (rotulo) {
+      enviarComRotulo(evento, rotulo);
+    } else {
+      enviar(evento);
+    }
+  })();
 
   // Dispara pageview automaticamente ao carregar
   enviar("visita");

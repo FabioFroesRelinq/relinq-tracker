@@ -134,6 +134,7 @@ export default function Dashboard() {
 
   const visitas = stats ? somarPorTipo(stats.totaisPorTipo, "visita") : 0;
   const conversoes = stats ? somarPorTipo(stats.totaisPorTipo, "conversao") : 0;
+  const quizzesFinalizados = stats ? somarPorTipo(stats.totaisPorTipo, "quiz_finalizado") : 0;
   const cliquesTotais = stats ? somarTodosCliques(stats.totaisPorTipo) : 0;
   const taxaConversao = visitas > 0 ? ((conversoes / visitas) * 100).toFixed(1) : "0.0";
 
@@ -264,6 +265,12 @@ export default function Dashboard() {
                   <div className="label">Conversões</div>
                   <div className="valor">{conversoes}</div>
                 </div>
+                {quizzesFinalizados > 0 && (
+                  <div className="card" style={{ "--acento": "#38bdf8" }}>
+                    <div className="label">Quizzes finalizados</div>
+                    <div className="valor">{quizzesFinalizados}</div>
+                  </div>
+                )}
                 <div className="card" style={{ "--acento": "#22c55e" }}>
                   <div className="label">Taxa de conversão</div>
                   <div className="valor">{taxaConversao}%</div>
