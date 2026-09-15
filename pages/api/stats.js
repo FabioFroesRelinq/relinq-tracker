@@ -111,7 +111,7 @@ export default async function handler(req, res) {
 
     // --- Cliques por rótulo, dentro de cada tipo (ex: qual plano/botão
     // específico foi clicado, sem separar da contagem agregada acima) ---
-    const [cliquesPorRotulo] = await pool.query(
+    const [cliquesPorRotuloBruto] = await pool.query(
       `SELECT tipo_evento, rotulo, COUNT(*) AS total
        FROM events
        WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento LIKE 'clique\\_%' AND rotulo IS NOT NULL
@@ -119,6 +119,29 @@ export default async function handler(req, res) {
        ORDER BY tipo_evento, total DESC`,
       filtroData
     );
+
+    // Completa com uma linha "Sem rótulo identificado" nos tipos que têm
+    // ALGUM clique já rotulado, pra fechar a conta com o total de
+    // "Cliques por tipo" (ex: nem todo botão de WhatsApp fica dentro de um
+    // card com título, então parte dos cliques não tem rótulo detectável).
+    // Tipos sem NENHUM clique rotulado ficam de fora — mostrar "100% sem
+    // rótulo" ali não agregaria nada que "Cliques por tipo" já não mostre.
+    const totalPorTipoMap = {};
+    cliquesPorTipo.forEach(function (c) {
+      totalPorTipoMap[c.tipo_evento] = c.total;
+    });
+    const somaRotuladoPorTipo = {};
+    cliquesPorRotuloBruto.forEach(function (c) {
+      somaRotuladoPorTipo[c.tipo_evento] = (somaRotuladoPorTipo[c.tipo_evento] || 0) + c.total;
+    });
+
+    const cliquesPorRotulo = cliquesPorRotuloBruto.slice();
+    Object.keys(somaRotuladoPorTipo).forEach(function (tipo) {
+      const semRotulo = (totalPorTipoMap[tipo] || 0) - somaRotuladoPorTipo[tipo];
+      if (semRotulo > 0) {
+        cliquesPorRotulo.push({ tipo_evento: tipo, rotulo: "Sem rótulo identificado", total: semRotulo });
+      }
+    });
 
     // --- Visitantes únicos ---
     const [[{ visitantesUnicos }]] = await pool.query(

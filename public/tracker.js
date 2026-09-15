@@ -286,6 +286,14 @@
         nivel++;
       }
 
+      // Não achou nenhum card com título por perto — usa o próprio texto
+      // do botão/link como rótulo (ex: "Falar com especialista"), que já
+      // é bem mais útil do que ficar sem identificação nenhuma.
+      var textoBotao = (el.textContent || "").trim();
+      if (textoBotao) {
+        return comCiclo(textoBotao.length > 60 ? textoBotao.slice(0, 60) + "…" : textoBotao);
+      }
+
       return null;
     }
 
