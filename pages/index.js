@@ -73,6 +73,26 @@ export default function Dashboard() {
   const [sites, setSites] = useState([]);
   const [siteSelecionado, setSiteSelecionado] = useState("");
   const [secoesFechadas, setSecoesFechadas] = useState({});
+  const [modoTV, setModoTV] = useState(false);
+
+  // Lê a preferência salva no navegador ao carregar (só no cliente, pra
+  // não dar erro de hidratação comparando servidor x navegador)
+  useEffect(function () {
+    try {
+      var salvo = localStorage.getItem("relinq_modo_tv");
+      if (salvo === "1") setModoTV(true);
+    } catch (e) {}
+  }, []);
+
+  useEffect(
+    function () {
+      document.body.classList.toggle("modo-tv", modoTV);
+      try {
+        localStorage.setItem("relinq_modo_tv", modoTV ? "1" : "0");
+      } catch (e) {}
+    },
+    [modoTV]
+  );
   const [buscaCliques, setBuscaCliques] = useState("");
   const [dataInicio, setDataInicio] = useState(
     new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
@@ -186,6 +206,14 @@ export default function Dashboard() {
           <Link href="/visao-geral">Visão geral</Link>
           <Link href="/jornada">Jornada do visitante</Link>
           <Link href="/sites">+ Cadastrar LP</Link>
+          <button
+            className={"btn-modo-tv" + (modoTV ? " ativo" : "")}
+            onClick={function () {
+              setModoTV(!modoTV);
+            }}
+          >
+            📺 {modoTV ? "Sair do Modo TV" : "Modo TV"}
+          </button>
           <button className="btn-sair" onClick={sair}>Sair</button>
         </div>
       </div>

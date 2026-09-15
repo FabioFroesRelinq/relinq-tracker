@@ -104,7 +104,36 @@ body {
   50% { opacity: 0.35; }
 }
 
-/* --- Filtros --- */
+.btn-modo-tv {
+  margin-left: 18px;
+  background: none;
+  border: 1px solid #263042;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.btn-modo-tv:hover {
+  border-color: #6366f1;
+  color: #e5e7eb;
+}
+
+.btn-modo-tv.ativo {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #fff;
+}
+
+/* --- Modo TV: amplia a página inteira de forma proporcional --- */
+body.modo-tv {
+  zoom: 1.6;
+}
+
+
 .filtros {
   display: flex;
   gap: 12px;
