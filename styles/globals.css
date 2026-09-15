@@ -557,13 +557,15 @@ tbody tr:last-child td {
 .graficos-topo {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
-  gap: 20px;
+  gap: 32px;
   align-items: start;
-  margin-bottom: 28px;
 }
 
-.graficos-topo .secao {
-  margin-bottom: 0;
+.grafico-subtitulo {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #94a3b8;
+  margin: 0 0 14px;
 }
 
 @media (max-width: 900px) {
@@ -695,4 +697,10 @@ tbody tr:last-child td {
 .barra-h-grupo .barra-h-linha {
   grid-template-columns: 80px 1fr 56px;
   margin-bottom: 6px;
+}
+
+.valor-secundario {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 4px;
 }

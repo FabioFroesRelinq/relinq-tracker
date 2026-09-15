@@ -170,6 +170,16 @@ export default async function handler(req, res) {
       filtroData
     );
 
+    // Adiciona o marco "0%" — visitantes que entraram e saíram sem rolar
+    // nem 25% da página. Como cada marco é cumulativo (quem chegou a
+    // 100% também disparou o de 25% no caminho), dá pra calcular: quem
+    // nunca rolou = todos os visitantes únicos menos quem alcançou 25%.
+    const alcancou25 = scrollProfundidade.find(function (m) {
+      return m.marco === 25;
+    });
+    const nuncaRolou = Math.max(0, Number(visitantesUnicos) - (alcancou25 ? alcancou25.total : 0));
+    scrollProfundidade.unshift({ marco: 0, total: nuncaRolou });
+
     // --- Tempo médio na página ---
     const [[{ tempoMedioSegundos }]] = await pool.query(
       `SELECT AVG(valor) AS tempoMedioSegundos

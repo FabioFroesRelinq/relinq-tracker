@@ -332,10 +332,6 @@ export default function Dashboard() {
             <>
               <div className="cards">
                 <div className="card" style={{ "--acento": "#6366f1" }}>
-                  <div className="label">Visitas</div>
-                  <div className="valor">{visitas}</div>
-                </div>
-                <div className="card" style={{ "--acento": "#06b6d4" }}>
                   <div className="label">Visitantes únicos</div>
                   <div className="valor">{stats.engajamento.visitantesUnicos}</div>
                 </div>
@@ -371,15 +367,18 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="graficos-topo">
-                <Secao id="grafico" titulo="Visitas por dia" aberta={!secoesFechadas.grafico} aoAlternar={alternarSecao}>
-                  <GraficoColunas serieDiaria={stats.serieDiaria} />
-                </Secao>
-
-                <Secao id="dispositivo" titulo="Dispositivo" aberta={!secoesFechadas.dispositivo} aoAlternar={alternarSecao}>
-                  <GraficoPizza porDispositivo={stats.engajamento.porDispositivo} totalVisitas={visitas} />
-                </Secao>
-              </div>
+              <Secao id="painel-visual" titulo="Painel de gráficos" aberta={!secoesFechadas["painel-visual"]} aoAlternar={alternarSecao}>
+                <div className="graficos-topo">
+                  <div>
+                    <h3 className="grafico-subtitulo">Visitas por dia</h3>
+                    <GraficoColunas serieDiaria={stats.serieDiaria} />
+                  </div>
+                  <div>
+                    <h3 className="grafico-subtitulo">Dispositivo</h3>
+                    <GraficoPizza porDispositivo={stats.engajamento.porDispositivo} totalVisitas={visitas} />
+                  </div>
+                </div>
+              </Secao>
 
               <Secao
                 id="cliques"
