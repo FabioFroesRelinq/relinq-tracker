@@ -48,6 +48,13 @@
  *    Também aceita &relinq_rotulo=algo, se quiser rotular esse evento.
  *    Reserve o evento "conversao" pra venda de verdade, não pra etapas
  *    intermediárias do funil como essa.
+ *
+ * 3) Se a ferramenta já empurra eventos pro dataLayer (GTM) — o que é
+ *    bem comum em quiz builders como a InLead — o tracker escuta sozinho
+ *    e replica cada evento como "quiz_<nome_original>" no painel, com
+ *    tentativa automática de achar um rótulo (pergunta/resposta) e um
+ *    valor numérico (progresso/percentual) dentro do objeto do evento.
+ *    Não precisa configurar nada a mais pra isso funcionar.
  */
 (function () {
   var scriptTag = document.currentScript;
@@ -585,6 +592,68 @@
     } else {
       enviar(evento);
     }
+  })();
+
+  // --- Ponte com o dataLayer (Google Tag Manager) ---
+  // Útil pra ferramentas de terceiros que já empurram eventos estruturados
+  // pro dataLayer (ex: quiz builders como a InLead, que costumam disparar
+  // algo tipo {event: 'quiz_question_answered', question: '...', answer: '...'}
+  // a cada resposta). Sem precisar saber o formato exato de antemão, isso
+  // escuta TODO evento que chega no dataLayer e replica pro Relinq Tracker
+  // automaticamente — tanto os que já estavam lá quando essa página carregou
+  // quanto os que chegarem depois.
+  //
+  // Nome do evento no painel: "quiz_" + o nome do evento original (ex:
+  // dataLayer manda "question_answered" -> vira "quiz_question_answered").
+  //
+  // Tenta também achar um rótulo e um valor numérico dentro do objeto do
+  // evento, olhando por nomes de campo comuns (funciona com qualquer
+  // ferramenta que siga essa convenção, não só a InLead):
+  //   rótulo: quiz_question, question, pergunta, answer, resposta, label, title
+  //   valor:  percent, progress, value  (quando forem número)
+  (function ponteDataLayer() {
+    if (!window.dataLayer) window.dataLayer = [];
+
+    function ignoravel(nomeEvento) {
+      return /^gtm\.|^optimize\.|^page_view$/i.test(nomeEvento);
+    }
+
+    function processar(item) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return;
+      var nomeEvento = item.event;
+      if (!nomeEvento || ignoravel(String(nomeEvento))) return;
+
+      var nomeFinal = "quiz_" + String(nomeEvento).toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+      var rotulo =
+        item.quiz_question || item.question || item.pergunta ||
+        item.answer || item.resposta || item.label || item.title || null;
+
+      var valor =
+        typeof item.percent === "number" ? item.percent :
+        typeof item.progress === "number" ? item.progress :
+        typeof item.value === "number" ? item.value :
+        null;
+
+      var extra = {};
+      if (rotulo) extra.rotulo = String(rotulo);
+      if (valor !== null) extra.valor = valor;
+
+      enviarPayload(montarPayload(nomeFinal, extra));
+    }
+
+    // Processa o que já estava no dataLayer antes desse script carregar
+    window.dataLayer.forEach(processar);
+
+    // Intercepta os próximos pushes, sem deixar de funcionar normalmente
+    // pro resto do que já usa o dataLayer (GTM, GA4, etc. continuam OK)
+    var pushOriginal = window.dataLayer.push;
+    window.dataLayer.push = function () {
+      for (var i = 0; i < arguments.length; i++) {
+        processar(arguments[i]);
+      }
+      return pushOriginal.apply(window.dataLayer, arguments);
+    };
   })();
 
   // Dispara pageview automaticamente ao carregar

@@ -155,6 +155,11 @@ export default function Dashboard() {
   const visitas = stats ? somarPorTipo(stats.totaisPorTipo, "visita") : 0;
   const conversoes = stats ? somarPorTipo(stats.totaisPorTipo, "conversao") : 0;
   const quizzesFinalizados = stats ? somarPorTipo(stats.totaisPorTipo, "quiz_finalizado") : 0;
+  const eventosQuiz = stats
+    ? stats.totaisPorTipo.filter(function (t) {
+        return t.tipo_evento.indexOf("quiz_") === 0 && t.tipo_evento !== "quiz_finalizado";
+      })
+    : [];
   const cliquesTotais = stats ? somarTodosCliques(stats.totaisPorTipo) : 0;
   const taxaConversao = visitas > 0 ? ((conversoes / visitas) * 100).toFixed(1) : "0.0";
 
@@ -373,6 +378,32 @@ export default function Dashboard() {
               {stats.video && stats.video.plays.length > 0 && (
                 <Secao id="video" titulo="Vídeo (VSL)" aberta={!secoesFechadas.video} aoAlternar={alternarSecao}>
                   <SecaoVideo video={stats.video} />
+                </Secao>
+              )}
+
+              {eventosQuiz.length > 0 && (
+                <Secao id="quiz" titulo="Eventos do quiz" aberta={!secoesFechadas.quiz} aoAlternar={alternarSecao}>
+                  <p className="vazio" style={{ marginBottom: 14 }}>
+                    Capturados automaticamente do dataLayer da ferramenta de quiz.
+                  </p>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Evento</th>
+                        <th>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {eventosQuiz.map(function (ev) {
+                        return (
+                          <tr key={ev.tipo_evento}>
+                            <td>{nomeAmigavelEvento(ev.tipo_evento)}</td>
+                            <td>{ev.total}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </Secao>
               )}
             </>
