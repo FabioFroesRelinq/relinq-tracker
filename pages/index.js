@@ -74,6 +74,8 @@ export default function Dashboard() {
   const [siteSelecionado, setSiteSelecionado] = useState("");
   const [secoesFechadas, setSecoesFechadas] = useState({});
   const [visualizacoes, setVisualizacoes] = useState({});
+  const [filtroCliquesLP, setFiltroCliquesLP] = useState("todas");
+  const [statsCliquesLP, setStatsCliquesLP] = useState(null);
 
   function vizAtual(id) {
     return visualizacoes[id] || "tabela";
@@ -165,6 +167,38 @@ export default function Dashboard() {
     [siteSelecionado, dataInicio, dataFim]
   );
 
+  // Filtro de LP específico dentro de "Cliques por tipo", só relevante
+  // quando o seletor principal está em "Todas as LPs juntas" — reseta
+  // sozinho se você trocar pra uma LP específica lá em cima.
+  useEffect(
+    function () {
+      if (siteSelecionado !== "todas") {
+        setFiltroCliquesLP("todas");
+        setStatsCliquesLP(null);
+      }
+    },
+    [siteSelecionado]
+  );
+
+  useEffect(
+    function () {
+      if (siteSelecionado !== "todas" || filtroCliquesLP === "todas") {
+        setStatsCliquesLP(null);
+        return;
+      }
+      fetch(
+        "/api/stats?site=" + filtroCliquesLP + "&inicio=" + dataInicio + "&fim=" + dataFim
+      )
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (dados) {
+          setStatsCliquesLP(dados);
+        });
+    },
+    [siteSelecionado, filtroCliquesLP, dataInicio, dataFim]
+  );
+
   const visitas = stats ? somarPorTipo(stats.totaisPorTipo, "visita") : 0;
   const conversoes = stats ? somarPorTipo(stats.totaisPorTipo, "conversao") : 0;
   const quizzesFinalizados = stats ? somarPorTipo(stats.totaisPorTipo, "quiz_finalizado") : 0;
@@ -181,24 +215,25 @@ export default function Dashboard() {
   const criativoAgrupado = stats ? agruparPorChave(stats.porCriativo, "utm_content") : {};
 
   var termoBusca = buscaCliques.trim().toLowerCase();
+  var baseCliques = statsCliquesLP || stats;
   var cliquesPorTipoFiltrado =
-    stats && termoBusca
-      ? stats.cliquesPorTipo.filter(function (c) {
+    baseCliques && termoBusca
+      ? baseCliques.cliquesPorTipo.filter(function (c) {
           return nomeAmigavelEvento(c.tipo_evento).toLowerCase().indexOf(termoBusca) !== -1;
         })
-      : stats
-      ? stats.cliquesPorTipo
+      : baseCliques
+      ? baseCliques.cliquesPorTipo
       : [];
   var cliquesPorRotuloFiltrado =
-    stats && termoBusca
-      ? stats.cliquesPorRotulo.filter(function (c) {
+    baseCliques && termoBusca
+      ? baseCliques.cliquesPorRotulo.filter(function (c) {
           return (
             nomeAmigavelEvento(c.tipo_evento).toLowerCase().indexOf(termoBusca) !== -1 ||
             (c.rotulo || "").toLowerCase().indexOf(termoBusca) !== -1
           );
         })
-      : stats
-      ? stats.cliquesPorRotulo
+      : baseCliques
+      ? baseCliques.cliquesPorRotulo
       : [];
 
   function alternarSecao(id) {
@@ -353,6 +388,24 @@ export default function Dashboard() {
                 aoAlternar={alternarSecao}
                 extra={
                   <div className="secao-extra-grupo">
+                    {siteSelecionado === "todas" && (
+                      <select
+                        className="busca-cliques"
+                        value={filtroCliquesLP}
+                        onChange={function (e) {
+                          setFiltroCliquesLP(e.target.value);
+                        }}
+                      >
+                        <option value="todas">Todas as LPs</option>
+                        {sites.map(function (s) {
+                          return (
+                            <option key={s.slug} value={s.slug}>
+                              {s.nome}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    )}
                     <input
                       className="busca-cliques"
                       type="text"
@@ -362,19 +415,25 @@ export default function Dashboard() {
                         setBuscaCliques(e.target.value);
                       }}
                     />
-                    <SeletorVisualizacao id="cliques" valor={vizAtual("cliques")} aoMudar={mudarViz} />
+                    <SeletorVisualizacao
+                      id="cliques"
+                      valor={vizAtual("cliques")}
+                      aoMudar={mudarViz}
+                      opcoes={["tabela", "pizza", "colunas", "barras"]}
+                    />
                   </div>
                 }
               >
-                {vizAtual("cliques") === "grafico" ? (
-                  <GraficoBarrasHorizontais
-                    dados={cliquesPorTipoFiltrado.map(function (c) {
-                      return { rotulo: nomeAmigavelEvento(c.tipo_evento), total: c.total };
-                    })}
-                  />
-                ) : (
-                  <TabelaCliques cliquesPorTipo={cliquesPorTipoFiltrado} />
-                )}
+                {(function () {
+                  var dadosGrafico = cliquesPorTipoFiltrado.map(function (c) {
+                    return { rotulo: nomeAmigavelEvento(c.tipo_evento), total: c.total };
+                  });
+                  var v = vizAtual("cliques");
+                  if (v === "pizza") return <GraficoPizzaGenerico dados={dadosGrafico} />;
+                  if (v === "colunas") return <GraficoColunasGenerico dados={dadosGrafico} />;
+                  if (v === "barras") return <GraficoBarrasHorizontais dados={dadosGrafico} />;
+                  return <TabelaCliques cliquesPorTipo={cliquesPorTipoFiltrado} />;
+                })()}
               </Secao>
 
               {cliquesPorRotuloFiltrado && cliquesPorRotuloFiltrado.length > 0 && (
@@ -383,17 +442,25 @@ export default function Dashboard() {
                   titulo="Detalhamento por botão"
                   aberta={!secoesFechadas.rotulo}
                   aoAlternar={alternarSecao}
-                  extra={<SeletorVisualizacao id="rotulo" valor={vizAtual("rotulo")} aoMudar={mudarViz} />}
-                >
-                  {vizAtual("rotulo") === "grafico" ? (
-                    <GraficoBarrasHorizontais
-                      dados={cliquesPorRotuloFiltrado.map(function (c) {
-                        return { rotulo: nomeAmigavelEvento(c.tipo_evento) + " — " + c.rotulo, total: c.total };
-                      })}
+                  extra={
+                    <SeletorVisualizacao
+                      id="rotulo"
+                      valor={vizAtual("rotulo")}
+                      aoMudar={mudarViz}
+                      opcoes={["tabela", "pizza", "colunas", "barras"]}
                     />
-                  ) : (
-                    <TabelaRotulo cliquesPorRotulo={cliquesPorRotuloFiltrado} />
-                  )}
+                  }
+                >
+                  {(function () {
+                    var dadosGrafico = cliquesPorRotuloFiltrado.map(function (c) {
+                      return { rotulo: nomeAmigavelEvento(c.tipo_evento) + " — " + c.rotulo, total: c.total };
+                    });
+                    var v = vizAtual("rotulo");
+                    if (v === "pizza") return <GraficoPizzaGenerico dados={dadosGrafico} />;
+                    if (v === "colunas") return <GraficoColunasGenerico dados={dadosGrafico} />;
+                    if (v === "barras") return <GraficoBarrasHorizontais dados={dadosGrafico} />;
+                    return <TabelaRotulo cliquesPorRotulo={cliquesPorRotuloFiltrado} />;
+                  })()}
                 </Secao>
               )}
 
@@ -402,19 +469,32 @@ export default function Dashboard() {
                 titulo="Profundidade de rolagem"
                 aberta={!secoesFechadas.scroll}
                 aoAlternar={alternarSecao}
-                extra={<SeletorVisualizacao id="scroll" valor={vizAtual("scroll")} aoMudar={mudarViz} />}
-              >
-                {vizAtual("scroll") === "grafico" ? (
-                  <GraficoBarrasHorizontais
-                    dados={stats.engajamento.scrollProfundidade.map(function (m) {
-                      return { rotulo: m.marco + "%", total: m.total };
-                    })}
-                    cor="#a78bfa"
+                extra={
+                  <SeletorVisualizacao
+                    id="scroll"
+                    valor={vizAtual("scroll")}
+                    aoMudar={mudarViz}
+                    opcoes={["tabela", "pizza", "colunas", "barras"]}
                   />
-                ) : (
-                  <TabelaScroll scrollProfundidade={stats.engajamento.scrollProfundidade} visitantesUnicos={stats.engajamento.visitantesUnicos} />
-                )}
+                }
+              >
+                {(function () {
+                  var dadosGrafico = stats.engajamento.scrollProfundidade.map(function (m) {
+                    return { rotulo: m.marco + "%", total: m.total };
+                  });
+                  var v = vizAtual("scroll");
+                  if (v === "pizza") return <GraficoPizzaGenerico dados={dadosGrafico} />;
+                  if (v === "colunas") return <GraficoColunasGenerico dados={dadosGrafico} />;
+                  if (v === "barras") return <GraficoBarrasHorizontais dados={dadosGrafico} cor="#a78bfa" />;
+                  return (
+                    <TabelaScroll
+                      scrollProfundidade={stats.engajamento.scrollProfundidade}
+                      visitantesUnicos={stats.engajamento.visitantesUnicos}
+                    />
+                  );
+                })()}
               </Secao>
+
 
               <Secao
                 id="origem"
@@ -767,26 +847,223 @@ function arredondarParaCima(valor) {
   return passo * magnitude;
 }
 
-function SeletorVisualizacao({ id, valor, aoMudar }) {
+var ROTULOS_VIZ = {
+  tabela: "☰ Tabela",
+  grafico: "📊 Gráfico",
+  pizza: "🥧 Pizza",
+  colunas: "📈 Colunas",
+  barras: "▤ Barras",
+};
+
+function SeletorVisualizacao({ id, valor, aoMudar, opcoes }) {
+  var lista = opcoes || ["tabela", "grafico"];
   return (
     <div className="seletor-viz">
-      <button
-        className={"seletor-viz-btn" + (valor === "tabela" ? " ativo" : "")}
-        onClick={function () {
-          aoMudar(id, "tabela");
-        }}
-      >
-        ☰ Tabela
-      </button>
-      <button
-        className={"seletor-viz-btn" + (valor === "grafico" ? " ativo" : "")}
-        onClick={function () {
-          aoMudar(id, "grafico");
-        }}
-      >
-        📊 Gráfico
-      </button>
+      {lista.map(function (op) {
+        return (
+          <button
+            key={op}
+            className={"seletor-viz-btn" + (valor === op ? " ativo" : "")}
+            onClick={function () {
+              aoMudar(id, op);
+            }}
+          >
+            {ROTULOS_VIZ[op] || op}
+          </button>
+        );
+      })}
     </div>
+  );
+}
+
+var PALETA_GENERICA = [
+  "#6366f1",
+  "#06b6d4",
+  "#f59e0b",
+  "#22c55e",
+  "#f43f5e",
+  "#a78bfa",
+  "#38bdf8",
+  "#facc15",
+  "#fb7185",
+  "#34d399",
+  "#818cf8",
+  "#f472b6",
+];
+
+function GraficoPizzaGenerico({ dados }) {
+  if (!dados || dados.length === 0) {
+    return <p className="vazio">Sem dados nesse período.</p>;
+  }
+
+  var total = dados.reduce(function (soma, d) {
+    return soma + d.total;
+  }, 0);
+
+  var raio = 80;
+  var raioInterno = 50;
+  var centro = 100;
+  var circunferencia = 2 * Math.PI * raio;
+
+  var acumulado = 0;
+  var fatias = dados.map(function (d, i) {
+    var fracao = total > 0 ? d.total / total : 0;
+    var fatia = {
+      rotulo: d.rotulo,
+      total: d.total,
+      pct: total > 0 ? ((d.total / total) * 100).toFixed(1) : "0.0",
+      cor: PALETA_GENERICA[i % PALETA_GENERICA.length],
+      offset: acumulado,
+      comprimento: fracao * circunferencia,
+    };
+    acumulado += fracao * circunferencia;
+    return fatia;
+  });
+
+  return (
+    <div className="pizza-wrap">
+      <svg viewBox="0 0 200 200" className="pizza-svg">
+        <g transform={"rotate(-90 " + centro + " " + centro + ")"}>
+          {fatias.map(function (f) {
+            return (
+              <circle
+                key={f.rotulo}
+                cx={centro}
+                cy={centro}
+                r={raio}
+                fill="none"
+                stroke={f.cor}
+                strokeWidth={raio - raioInterno}
+                strokeDasharray={f.comprimento + " " + (circunferencia - f.comprimento)}
+                strokeDashoffset={-f.offset}
+              />
+            );
+          })}
+        </g>
+        <text x={centro} y={centro - 6} textAnchor="middle" fontSize="24" fontWeight="800" fill="#fff">
+          {total}
+        </text>
+        <text x={centro} y={centro + 16} textAnchor="middle" fontSize="12" fill="#94a3b8">
+          total
+        </text>
+      </svg>
+
+      <div className="pizza-legenda">
+        {fatias.map(function (f) {
+          return (
+            <div key={f.rotulo} className="pizza-legenda-item">
+              <span className="ponto" style={{ background: f.cor }} />
+              <span className="pizza-legenda-nome" title={f.rotulo}>
+                {f.rotulo}
+              </span>
+              <span className="pizza-legenda-valor">
+                {f.total} <span className="pizza-legenda-pct">({f.pct}%)</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function GraficoColunasGenerico({ dados }) {
+  if (!dados || dados.length === 0) {
+    return <p className="vazio">Sem dados nesse período.</p>;
+  }
+
+  var largura = 1200;
+  var altura = 340;
+  var margem = { topo: 24, baixo: 90, esq: 48, dir: 20 };
+  var areaLargura = largura - margem.esq - margem.dir;
+  var areaAltura = altura - margem.topo - margem.baixo;
+
+  var maiorValor = Math.max(
+    1,
+    ...dados.map(function (d) {
+      return d.total;
+    })
+  );
+  var maxEixo = arredondarParaCima(maiorValor);
+
+  function coordY(valor) {
+    return margem.topo + areaAltura - (valor / maxEixo) * areaAltura;
+  }
+
+  var n = dados.length;
+  var larguraGrupo = areaLargura / n;
+  var larguraBarra = Math.max(8, Math.min(60, larguraGrupo * 0.55));
+
+  var linhasGrade = [0, 0.25, 0.5, 0.75, 1].map(function (fracao) {
+    return { y: coordY(maxEixo * fracao), rotulo: Math.round(maxEixo * fracao) };
+  });
+
+  return (
+    <svg viewBox={"0 0 " + largura + " " + altura} style={{ width: "100%", height: "auto", display: "block" }}>
+      <defs>
+        <linearGradient id="col-generico-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#6366f1" stopOpacity="1" />
+          <stop offset="100%" stopColor="#6366f1" stopOpacity="0.55" />
+        </linearGradient>
+        <filter id="sombra-coluna-generica" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.35" />
+        </filter>
+      </defs>
+
+      {linhasGrade.map(function (linha, i) {
+        return (
+          <g key={i}>
+            <line
+              x1={margem.esq}
+              y1={linha.y}
+              x2={largura - margem.dir}
+              y2={linha.y}
+              stroke="rgba(255,255,255,0.07)"
+              strokeWidth="1"
+            />
+            <text x={margem.esq - 10} y={linha.y + 4} fontSize="12" fill="#64748b" textAnchor="end">
+              {linha.rotulo}
+            </text>
+          </g>
+        );
+      })}
+
+      {dados.map(function (d, i) {
+        var x = margem.esq + i * larguraGrupo + (larguraGrupo - larguraBarra) / 2;
+        var y = coordY(d.total);
+        var altura2 = margem.topo + areaAltura - y;
+        var centroX = x + larguraBarra / 2;
+        var baseY = margem.topo + areaAltura + 18;
+        var rotuloCurto = d.rotulo.length > 18 ? d.rotulo.slice(0, 18) + "…" : d.rotulo;
+        return (
+          <g key={d.rotulo + "-" + i} filter="url(#sombra-coluna-generica)">
+            <rect
+              x={x}
+              y={y}
+              width={larguraBarra}
+              height={Math.max(altura2, 0)}
+              rx={Math.min(4, larguraBarra / 2)}
+              fill="url(#col-generico-grad)"
+            />
+            {d.total > 0 && (
+              <text x={centroX} y={y - 6} fontSize="11" fill="#cbd5e1" textAnchor="middle">
+                {d.total}
+              </text>
+            )}
+            <text
+              x={centroX}
+              y={baseY}
+              fontSize="11"
+              fill="#94a3b8"
+              textAnchor="end"
+              transform={"rotate(-40 " + centroX + " " + baseY + ")"}
+            >
+              {rotuloCurto}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
