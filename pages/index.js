@@ -73,6 +73,19 @@ export default function Dashboard() {
   const [sites, setSites] = useState([]);
   const [siteSelecionado, setSiteSelecionado] = useState("");
   const [secoesFechadas, setSecoesFechadas] = useState({});
+  const [visualizacoes, setVisualizacoes] = useState({});
+
+  function vizAtual(id) {
+    return visualizacoes[id] || "tabela";
+  }
+
+  function mudarViz(id, valor) {
+    setVisualizacoes(function (atual) {
+      var novo = Object.assign({}, atual);
+      novo[id] = valor;
+      return novo;
+    });
+  }
   const [modoTV, setModoTV] = useState(false);
 
   // Lê a preferência salva no navegador ao carregar (só no cliente, pra
@@ -339,40 +352,111 @@ export default function Dashboard() {
                 aberta={!secoesFechadas.cliques}
                 aoAlternar={alternarSecao}
                 extra={
-                  <input
-                    className="busca-cliques"
-                    type="text"
-                    placeholder="🔎 Filtrar por tipo ou botão..."
-                    value={buscaCliques}
-                    onChange={function (e) {
-                      setBuscaCliques(e.target.value);
-                    }}
-                  />
+                  <div className="secao-extra-grupo">
+                    <input
+                      className="busca-cliques"
+                      type="text"
+                      placeholder="🔎 Filtrar por tipo ou botão..."
+                      value={buscaCliques}
+                      onChange={function (e) {
+                        setBuscaCliques(e.target.value);
+                      }}
+                    />
+                    <SeletorVisualizacao id="cliques" valor={vizAtual("cliques")} aoMudar={mudarViz} />
+                  </div>
                 }
               >
-                <TabelaCliques cliquesPorTipo={cliquesPorTipoFiltrado} />
+                {vizAtual("cliques") === "grafico" ? (
+                  <GraficoBarrasHorizontais
+                    dados={cliquesPorTipoFiltrado.map(function (c) {
+                      return { rotulo: nomeAmigavelEvento(c.tipo_evento), total: c.total };
+                    })}
+                  />
+                ) : (
+                  <TabelaCliques cliquesPorTipo={cliquesPorTipoFiltrado} />
+                )}
               </Secao>
 
               {cliquesPorRotuloFiltrado && cliquesPorRotuloFiltrado.length > 0 && (
-                <Secao id="rotulo" titulo="Detalhamento por botão" aberta={!secoesFechadas.rotulo} aoAlternar={alternarSecao}>
-                  <TabelaRotulo cliquesPorRotulo={cliquesPorRotuloFiltrado} />
+                <Secao
+                  id="rotulo"
+                  titulo="Detalhamento por botão"
+                  aberta={!secoesFechadas.rotulo}
+                  aoAlternar={alternarSecao}
+                  extra={<SeletorVisualizacao id="rotulo" valor={vizAtual("rotulo")} aoMudar={mudarViz} />}
+                >
+                  {vizAtual("rotulo") === "grafico" ? (
+                    <GraficoBarrasHorizontais
+                      dados={cliquesPorRotuloFiltrado.map(function (c) {
+                        return { rotulo: nomeAmigavelEvento(c.tipo_evento) + " — " + c.rotulo, total: c.total };
+                      })}
+                    />
+                  ) : (
+                    <TabelaRotulo cliquesPorRotulo={cliquesPorRotuloFiltrado} />
+                  )}
                 </Secao>
               )}
 
-              <Secao id="scroll" titulo="Profundidade de rolagem" aberta={!secoesFechadas.scroll} aoAlternar={alternarSecao}>
-                <TabelaScroll scrollProfundidade={stats.engajamento.scrollProfundidade} visitantesUnicos={stats.engajamento.visitantesUnicos} />
+              <Secao
+                id="scroll"
+                titulo="Profundidade de rolagem"
+                aberta={!secoesFechadas.scroll}
+                aoAlternar={alternarSecao}
+                extra={<SeletorVisualizacao id="scroll" valor={vizAtual("scroll")} aoMudar={mudarViz} />}
+              >
+                {vizAtual("scroll") === "grafico" ? (
+                  <GraficoBarrasHorizontais
+                    dados={stats.engajamento.scrollProfundidade.map(function (m) {
+                      return { rotulo: m.marco + "%", total: m.total };
+                    })}
+                    cor="#a78bfa"
+                  />
+                ) : (
+                  <TabelaScroll scrollProfundidade={stats.engajamento.scrollProfundidade} visitantesUnicos={stats.engajamento.visitantesUnicos} />
+                )}
               </Secao>
 
-              <Secao id="origem" titulo="Por origem (utm_source)" aberta={!secoesFechadas.origem} aoAlternar={alternarSecao}>
-                <TabelaAgrupada dados={origemAgrupada} />
+              <Secao
+                id="origem"
+                titulo="Por origem (utm_source)"
+                aberta={!secoesFechadas.origem}
+                aoAlternar={alternarSecao}
+                extra={<SeletorVisualizacao id="origem" valor={vizAtual("origem")} aoMudar={mudarViz} />}
+              >
+                {vizAtual("origem") === "grafico" ? (
+                  <GraficoBarrasAgrupadasH dados={origemAgrupada} />
+                ) : (
+                  <TabelaAgrupada dados={origemAgrupada} />
+                )}
               </Secao>
 
-              <Secao id="campanha" titulo="Por campanha (utm_campaign)" aberta={!secoesFechadas.campanha} aoAlternar={alternarSecao}>
-                <TabelaAgrupada dados={campanhaAgrupada} />
+              <Secao
+                id="campanha"
+                titulo="Por campanha (utm_campaign)"
+                aberta={!secoesFechadas.campanha}
+                aoAlternar={alternarSecao}
+                extra={<SeletorVisualizacao id="campanha" valor={vizAtual("campanha")} aoMudar={mudarViz} />}
+              >
+                {vizAtual("campanha") === "grafico" ? (
+                  <GraficoBarrasAgrupadasH dados={campanhaAgrupada} />
+                ) : (
+                  <TabelaAgrupada dados={campanhaAgrupada} />
+                )}
               </Secao>
 
-              <Secao id="criativo" titulo="Por anúncio/criativo (utm_content)" aberta={!secoesFechadas.criativo} aoAlternar={alternarSecao}>
-                <TabelaAgrupada dados={criativoAgrupado} />
+
+              <Secao
+                id="criativo"
+                titulo="Por anúncio/criativo (utm_content)"
+                aberta={!secoesFechadas.criativo}
+                aoAlternar={alternarSecao}
+                extra={<SeletorVisualizacao id="criativo" valor={vizAtual("criativo")} aoMudar={mudarViz} />}
+              >
+                {vizAtual("criativo") === "grafico" ? (
+                  <GraficoBarrasAgrupadasH dados={criativoAgrupado} />
+                ) : (
+                  <TabelaAgrupada dados={criativoAgrupado} />
+                )}
               </Secao>
 
               {stats.video && stats.video.plays.length > 0 && (
@@ -681,6 +765,110 @@ function arredondarParaCima(valor) {
   else if (normalizado <= 5) passo = 5;
   else passo = 10;
   return passo * magnitude;
+}
+
+function SeletorVisualizacao({ id, valor, aoMudar }) {
+  return (
+    <div className="seletor-viz">
+      <button
+        className={"seletor-viz-btn" + (valor === "tabela" ? " ativo" : "")}
+        onClick={function () {
+          aoMudar(id, "tabela");
+        }}
+      >
+        ☰ Tabela
+      </button>
+      <button
+        className={"seletor-viz-btn" + (valor === "grafico" ? " ativo" : "")}
+        onClick={function () {
+          aoMudar(id, "grafico");
+        }}
+      >
+        📊 Gráfico
+      </button>
+    </div>
+  );
+}
+
+function GraficoBarrasHorizontais({ dados, cor }) {
+  if (!dados || dados.length === 0) {
+    return <p className="vazio">Sem dados nesse período.</p>;
+  }
+
+  var corBarra = cor || "#6366f1";
+  var maxValor = Math.max(
+    1,
+    ...dados.map(function (d) {
+      return d.total;
+    })
+  );
+
+  return (
+    <div className="barras-h">
+      {dados.map(function (d, i) {
+        var pct = (d.total / maxValor) * 100;
+        return (
+          <div className="barra-h-linha" key={d.rotulo + "-" + i}>
+            <span className="barra-h-rotulo" title={d.rotulo}>
+              {d.rotulo}
+            </span>
+            <div className="barra-h-trilha">
+              <div className="barra-h-preenchimento" style={{ width: pct + "%", background: corBarra }} />
+            </div>
+            <span className="barra-h-valor">{d.total}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function GraficoBarrasAgrupadasH({ dados }) {
+  var chaves = Object.keys(dados);
+
+  if (chaves.length === 0) {
+    return <p className="vazio">Sem dados nesse período.</p>;
+  }
+
+  var series = [
+    { chave: "visita", cor: "#6366f1", nome: "Visitas" },
+    { chave: "cliques", cor: "#f59e0b", nome: "Cliques" },
+    { chave: "conversao", cor: "#22c55e", nome: "Conversões" },
+  ];
+
+  var maxValor = Math.max(
+    1,
+    ...chaves.map(function (c) {
+      var l = dados[c];
+      return Math.max(l.visita, l.cliques, l.conversao);
+    })
+  );
+
+  return (
+    <div className="barras-h-agrupadas">
+      {chaves.map(function (chave) {
+        var linha = dados[chave];
+        return (
+          <div className="barra-h-grupo" key={chave}>
+            <div className="barra-h-grupo-titulo">{chave}</div>
+            {series.map(function (s) {
+              var valor = linha[s.chave];
+              var pct = (valor / maxValor) * 100;
+              return (
+                <div className="barra-h-linha" key={s.chave}>
+                  <span className="barra-h-rotulo-mini">{s.nome}</span>
+                  <div className="barra-h-trilha">
+                    <div className="barra-h-preenchimento" style={{ width: pct + "%", background: s.cor }} />
+                  </div>
+                  <span className="barra-h-valor">{valor}</span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function GraficoColunas({ serieDiaria }) {

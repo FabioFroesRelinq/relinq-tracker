@@ -593,3 +593,106 @@ tbody tr:last-child td {
   border-radius: 50%;
   display: inline-block;
 }
+
+.secao-extra-grupo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.seletor-viz {
+  display: inline-flex;
+  background: #0d1424;
+  border: 1px solid #263042;
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.seletor-viz-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.seletor-viz-btn.ativo {
+  background: #6366f1;
+  color: #fff;
+}
+
+.seletor-viz-btn:hover:not(.ativo) {
+  color: #e5e7eb;
+}
+
+/* --- Barras horizontais (alternativa às tabelas grandes) --- */
+.barras-h {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.barra-h-linha {
+  display: grid;
+  grid-template-columns: minmax(120px, 220px) 1fr 56px;
+  align-items: center;
+  gap: 12px;
+}
+
+.barra-h-rotulo {
+  font-size: 0.9rem;
+  color: #cbd5e1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.barra-h-rotulo-mini {
+  font-size: 0.78rem;
+  color: #64748b;
+  min-width: 80px;
+}
+
+.barra-h-trilha {
+  background: #0d1424;
+  border-radius: 6px;
+  height: 14px;
+  overflow: hidden;
+}
+
+.barra-h-preenchimento {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.barra-h-valor {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  text-align: right;
+}
+
+.barras-h-agrupadas {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.barra-h-grupo-titulo {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 8px;
+}
+
+.barra-h-grupo .barra-h-linha {
+  grid-template-columns: 80px 1fr 56px;
+  margin-bottom: 6px;
+}
