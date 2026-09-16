@@ -294,6 +294,21 @@
         return comCiclo(textoBotao.length > 60 ? textoBotao.slice(0, 60) + "…" : textoBotao);
       }
 
+      // Botão só com ícone, sem texto nenhum (ex: o WhatsApp flutuante) —
+      // tenta o aria-label ou title, que costumam existir justamente pra
+      // descrever o que é o botão pra quem usa leitor de tela.
+      var rotuloAcessivel = el.getAttribute("aria-label") || el.getAttribute("title");
+      if (rotuloAcessivel && rotuloAcessivel.trim()) {
+        return comCiclo(rotuloAcessivel.trim());
+      }
+
+      // Último recurso: identifica pelo destino do link (ex: o próprio
+      // número/endereço de WhatsApp), melhor do que não saber nada.
+      var href = el.getAttribute("href");
+      if (href) {
+        return comCiclo(href.length > 60 ? href.slice(0, 60) + "…" : href);
+      }
+
       return null;
     }
 
