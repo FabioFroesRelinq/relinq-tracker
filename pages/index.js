@@ -74,6 +74,7 @@ export default function Dashboard() {
   const [siteSelecionado, setSiteSelecionado] = useState("");
   const [secoesFechadas, setSecoesFechadas] = useState({});
   const [visualizacoes, setVisualizacoes] = useState({});
+  const [tipoDetalhamento, setTipoDetalhamento] = useState("clique_whatsapp");
   const [filtroCliquesLP, setFiltroCliquesLP] = useState("todas");
   const [statsCliquesLP, setStatsCliquesLP] = useState(null);
 
@@ -235,6 +236,21 @@ export default function Dashboard() {
       : baseCliques
       ? baseCliques.cliquesPorRotulo
       : [];
+
+  // Tipos de clique disponíveis pra escolher em "Detalhamento por botão"
+  // (só os que realmente têm algum rótulo pra detalhar)
+  var tiposDisponiveisDetalhamento = [];
+  (baseCliques ? baseCliques.cliquesPorRotulo : []).forEach(function (c) {
+    if (tiposDisponiveisDetalhamento.indexOf(c.tipo_evento) === -1) {
+      tiposDisponiveisDetalhamento.push(c.tipo_evento);
+    }
+  });
+  var tipoDetalhamentoAtivo =
+    tiposDisponiveisDetalhamento.indexOf(tipoDetalhamento) !== -1
+      ? tipoDetalhamento
+      : tiposDisponiveisDetalhamento.indexOf("clique_whatsapp") !== -1
+      ? "clique_whatsapp"
+      : tiposDisponiveisDetalhamento[0];
 
   function alternarSecao(id) {
     setSecoesFechadas(function (atual) {
@@ -442,23 +458,43 @@ export default function Dashboard() {
                   aberta={!secoesFechadas.rotulo}
                   aoAlternar={alternarSecao}
                   extra={
-                    <SeletorVisualizacao
-                      id="rotulo"
-                      valor={vizAtual("rotulo")}
-                      aoMudar={mudarViz}
-                      opcoes={["tabela", "pizza", "colunas", "barras"]}
-                    />
+                    <div className="secao-extra-grupo">
+                      <select
+                        className="busca-cliques"
+                        value={tipoDetalhamentoAtivo}
+                        onChange={function (e) {
+                          setTipoDetalhamento(e.target.value);
+                        }}
+                      >
+                        {tiposDisponiveisDetalhamento.map(function (t) {
+                          return (
+                            <option key={t} value={t}>
+                              {nomeAmigavelEvento(t)}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <SeletorVisualizacao
+                        id="rotulo"
+                        valor={vizAtual("rotulo")}
+                        aoMudar={mudarViz}
+                        opcoes={["tabela", "pizza", "colunas", "barras"]}
+                      />
+                    </div>
                   }
                 >
                   {(function () {
-                    var dadosGrafico = cliquesPorRotuloFiltrado.map(function (c) {
-                      return { rotulo: nomeAmigavelEvento(c.tipo_evento) + " — " + c.rotulo, total: c.total };
+                    var linhasFiltradas = cliquesPorRotuloFiltrado.filter(function (c) {
+                      return c.tipo_evento === tipoDetalhamentoAtivo;
+                    });
+                    var dadosGrafico = linhasFiltradas.map(function (c) {
+                      return { rotulo: c.rotulo, total: c.total };
                     });
                     var v = vizAtual("rotulo");
                     if (v === "pizza") return <GraficoPizzaGenerico dados={dadosGrafico} />;
                     if (v === "colunas") return <GraficoColunasGenerico dados={dadosGrafico} />;
                     if (v === "barras") return <GraficoBarrasHorizontais dados={dadosGrafico} />;
-                    return <TabelaRotulo cliquesPorRotulo={cliquesPorRotuloFiltrado} />;
+                    return <TabelaRotuloSimples dados={linhasFiltradas} />;
                   })()}
                 </Secao>
               )}
@@ -623,33 +659,31 @@ function TabelaCliques({ cliquesPorTipo }) {
   );
 }
 
-function TabelaRotulo({ cliquesPorRotulo }) {
-  var porTipo = {};
-  cliquesPorRotulo.forEach(function (c) {
-    if (!porTipo[c.tipo_evento]) porTipo[c.tipo_evento] = [];
-    porTipo[c.tipo_evento].push(c);
+function TabelaRotuloSimples({ dados }) {
+  if (!dados || dados.length === 0) {
+    return <p className="vazio">Sem dados nesse período.</p>;
+  }
+
+  var ordenado = dados.slice().sort(function (a, b) {
+    return b.total - a.total;
   });
 
   return (
     <table>
       <thead>
         <tr>
-          <th>Tipo de clique</th>
           <th>Botão / rótulo</th>
           <th>Total</th>
         </tr>
       </thead>
       <tbody>
-        {Object.keys(porTipo).map(function (tipo) {
-          return porTipo[tipo].map(function (c, i) {
-            return (
-              <tr key={tipo + "-" + c.rotulo}>
-                <td>{i === 0 ? nomeAmigavelEvento(tipo) : ""}</td>
-                <td>{c.rotulo}</td>
-                <td>{c.total}</td>
-              </tr>
-            );
-          });
+        {ordenado.map(function (c) {
+          return (
+            <tr key={c.rotulo}>
+              <td>{c.rotulo}</td>
+              <td>{c.total}</td>
+            </tr>
+          );
         })}
       </tbody>
     </table>
