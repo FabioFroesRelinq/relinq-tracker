@@ -99,6 +99,18 @@ export default async function handler(req, res) {
       filtroData
     );
 
+    // Detalhamento de QUAIS botões foram clicados por quem veio de cada
+    // utm_content específico (ex: "8 pessoas vieram do link da bio e
+    // clicaram em 21 botões" -> aqui dá pra ver quais botões foram esses)
+    const [cliquesPorCriativoDetalhado] = await pool.query(
+      `SELECT utm_content, tipo_evento, COALESCE(rotulo, 'Sem rótulo identificado') AS rotulo, COUNT(*) AS total
+       FROM events
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND utm_content IS NOT NULL AND tipo_evento LIKE 'clique\\_%'
+       GROUP BY utm_content, tipo_evento, rotulo
+       ORDER BY utm_content, total DESC`,
+      filtroData
+    );
+
     // --- Cliques por tipo (qualquer evento "clique_*" conta separado) ---
     const [cliquesPorTipo] = await pool.query(
       `SELECT tipo_evento, COUNT(*) AS total
@@ -241,6 +253,7 @@ export default async function handler(req, res) {
       porOrigem,
       porCampanha,
       porCriativo,
+      cliquesPorCriativoDetalhado,
       cliquesPorTipo,
       cliquesPorRotulo,
       engajamento: {

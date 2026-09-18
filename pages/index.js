@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import Relogio from "../components/Relogio";
@@ -203,9 +203,10 @@ export default function Dashboard() {
   const visitas = stats ? somarPorTipo(stats.totaisPorTipo, "visita") : 0;
   const conversoes = stats ? somarPorTipo(stats.totaisPorTipo, "conversao") : 0;
   const quizzesFinalizados = stats ? somarPorTipo(stats.totaisPorTipo, "quiz_finalizado") : 0;
-  const eventosQuiz = stats
+  const leadsCapturados = stats ? somarPorTipo(stats.totaisPorTipo, "lead_capturado") : 0;
+  const eventosGtm = stats
     ? stats.totaisPorTipo.filter(function (t) {
-        return t.tipo_evento.indexOf("quiz_") === 0 && t.tipo_evento !== "quiz_finalizado";
+        return t.tipo_evento.indexOf("gtm_") === 0;
       })
     : [];
   const cliquesTotais = stats ? somarTodosCliques(stats.totaisPorTipo) : 0;
@@ -214,6 +215,14 @@ export default function Dashboard() {
   const origemAgrupada = stats ? agruparPorChave(stats.porOrigem, "utm_source") : {};
   const campanhaAgrupada = stats ? agruparPorChave(stats.porCampanha, "utm_campaign") : {};
   const criativoAgrupado = stats ? agruparPorChave(stats.porCriativo, "utm_content") : {};
+
+  var detalhamentoPorCriativo = {};
+  if (stats && stats.cliquesPorCriativoDetalhado) {
+    stats.cliquesPorCriativoDetalhado.forEach(function (linha) {
+      if (!detalhamentoPorCriativo[linha.utm_content]) detalhamentoPorCriativo[linha.utm_content] = [];
+      detalhamentoPorCriativo[linha.utm_content].push(linha);
+    });
+  }
 
   var termoBusca = buscaCliques.trim().toLowerCase();
   var baseCliques = statsCliquesLP || stats;
@@ -363,6 +372,12 @@ export default function Dashboard() {
                   <div className="card" style={{ "--acento": "#38bdf8" }}>
                     <div className="label">Quizzes finalizados</div>
                     <div className="valor">{quizzesFinalizados}</div>
+                  </div>
+                )}
+                {leadsCapturados > 0 && (
+                  <div className="card" style={{ "--acento": "#fb923c" }}>
+                    <div className="label">Leads capturados</div>
+                    <div className="valor">{leadsCapturados}</div>
                   </div>
                 )}
                 <div className="card" style={{ "--acento": "#22c55e" }}>
@@ -570,7 +585,7 @@ export default function Dashboard() {
                 {vizAtual("criativo") === "grafico" ? (
                   <GraficoBarrasAgrupadasH dados={criativoAgrupado} />
                 ) : (
-                  <TabelaAgrupada dados={criativoAgrupado} />
+                  <TabelaAgrupada dados={criativoAgrupado} detalhamento={detalhamentoPorCriativo} />
                 )}
               </Secao>
 
@@ -580,10 +595,10 @@ export default function Dashboard() {
                 </Secao>
               )}
 
-              {eventosQuiz.length > 0 && (
-                <Secao id="quiz" titulo="Eventos do quiz" aberta={!secoesFechadas.quiz} aoAlternar={alternarSecao}>
+              {eventosGtm.length > 0 && (
+                <Secao id="gtm" titulo="Outros eventos do GTM" aberta={!secoesFechadas.gtm} aoAlternar={alternarSecao}>
                   <p className="vazio" style={{ marginBottom: 14 }}>
-                    Capturados automaticamente do dataLayer da ferramenta de quiz.
+                    Capturados automaticamente do dataLayer (eventos que o GTM manda e não têm um mapeamento direto pra convenção da Relinq).
                   </p>
                   <table>
                     <thead>
@@ -593,7 +608,7 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {eventosQuiz.map(function (ev) {
+                      {eventosGtm.map(function (ev) {
                         return (
                           <tr key={ev.tipo_evento}>
                             <td>{nomeAmigavelEvento(ev.tipo_evento)}</td>
@@ -1349,11 +1364,20 @@ function GraficoColunas({ serieDiaria }) {
   );
 }
 
-function TabelaAgrupada({ dados }) {
+function TabelaAgrupada({ dados, detalhamento }) {
   const chaves = Object.keys(dados);
+  const [linhasAbertas, setLinhasAbertas] = useState({});
 
   if (chaves.length === 0) {
     return <p className="vazio">Sem dados nesse período.</p>;
+  }
+
+  function alternarLinha(chave) {
+    setLinhasAbertas(function (atual) {
+      var novo = Object.assign({}, atual);
+      novo[chave] = !novo[chave];
+      return novo;
+    });
   }
 
   return (
@@ -1369,13 +1393,59 @@ function TabelaAgrupada({ dados }) {
       <tbody>
         {chaves.map(function (chave) {
           const linha = dados[chave];
+          const itensDetalhe = detalhamento && detalhamento[chave];
+          const temDetalhe = itensDetalhe && itensDetalhe.length > 0;
+          const aberta = !!linhasAbertas[chave];
+
           return (
-            <tr key={chave}>
-              <td>{chave}</td>
-              <td>{linha.visita}</td>
-              <td>{linha.cliques}</td>
-              <td>{linha.conversao}</td>
-            </tr>
+            <Fragment key={chave}>
+              <tr>
+                <td>
+                  {temDetalhe && (
+                    <button
+                      className="link-acao"
+                      style={{ marginRight: 8 }}
+                      onClick={function () {
+                        alternarLinha(chave);
+                      }}
+                    >
+                      {aberta ? "▾" : "▸"}
+                    </button>
+                  )}
+                  {chave}
+                </td>
+                <td>{linha.visita}</td>
+                <td>{linha.cliques}</td>
+                <td>{linha.conversao}</td>
+              </tr>
+              {temDetalhe && aberta && (
+                <tr>
+                  <td colSpan="4" className="linha-detalhe">
+                    <div className="detalhe-titulo">Botões clicados por quem veio de "{chave}"</div>
+                    <table className="tabela-aninhada">
+                      <thead>
+                        <tr>
+                          <th>Botão / rótulo</th>
+                          <th>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {itensDetalhe.map(function (d, i) {
+                          return (
+                            <tr key={i}>
+                              <td>
+                                {nomeAmigavelEvento(d.tipo_evento)} — {d.rotulo}
+                              </td>
+                              <td>{d.total}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           );
         })}
       </tbody>

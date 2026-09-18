@@ -704,3 +704,25 @@ tbody tr:last-child td {
   color: #64748b;
   margin-top: 4px;
 }
+
+.linha-detalhe {
+  background: #0d1424 !important;
+  padding: 16px 20px !important;
+}
+
+.detalhe-titulo {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin-bottom: 10px;
+}
+
+.tabela-aninhada {
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+.tabela-aninhada th,
+.tabela-aninhada td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #1e293b;
+}
