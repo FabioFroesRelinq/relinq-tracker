@@ -94,7 +94,12 @@ export default function ModoTV() {
   const [indice, setIndice] = useState(0);
   const [periodo, setPeriodo] = useState("7d");
   const [intervalo, setIntervalo] = useState(20);
-  const [pausado, setPausado] = useState(false);
+  // Padrão: mostra "Todas as LPs" e fica parado. Quem quiser que alterne aperta o play.
+  const [pausado, setPausado] = useState(true);
+  const [selecionadas, setSelecionadas] = useState(null); // slugs escolhidos; null = padrão
+  const [menuAberto, setMenuAberto] = useState(false);
+  const menuRef = useRef(null);
+  const menuAbertoRef = useRef(false);
   const [cache, setCache] = useState({});
   const [cacheAnt, setCacheAnt] = useState({});
   const [controlesVisiveis, setControlesVisiveis] = useState(true);
@@ -107,6 +112,9 @@ export default function ModoTV() {
       if (salvo) {
         if (PERIODOS.some(function (p) { return p.id === salvo.periodo; })) setPeriodo(salvo.periodo);
         if (INTERVALOS.indexOf(salvo.intervalo) >= 0) setIntervalo(salvo.intervalo);
+        if (Array.isArray(salvo.lps) && salvo.lps.every(function (s) { return typeof s === "string"; })) {
+          setSelecionadas(salvo.lps);
+        }
       }
     } catch (e) {}
   }, []);
@@ -114,10 +122,10 @@ export default function ModoTV() {
   useEffect(
     function () {
       try {
-        localStorage.setItem(CHAVE_CFG, JSON.stringify({ periodo: periodo, intervalo: intervalo }));
+        localStorage.setItem(CHAVE_CFG, JSON.stringify({ periodo: periodo, intervalo: intervalo, lps: selecionadas }));
       } catch (e) {}
     },
-    [periodo, intervalo]
+    [periodo, intervalo, selecionadas]
   );
 
   useEffect(function () {
@@ -130,8 +138,24 @@ export default function ModoTV() {
       });
   }, []);
 
-  // Slides: "todas as LPs" (se houver mais de uma) + cada LP
-  var slides = sites.length > 1 ? [{ slug: "todas", nome: "Todas as LPs" }].concat(sites) : sites;
+  // Opções: "todas as LPs" (soma, se houver mais de uma) + cada LP.
+  var opcoes = sites.length > 1 ? [{ slug: "todas", nome: "Todas as LPs" }].concat(sites) : sites;
+  var escolhidas =
+    selecionadas === null
+      ? opcoes.length > 0
+        ? [opcoes[0].slug]
+        : []
+      : selecionadas.filter(function (s) {
+          return opcoes.some(function (o) {
+            return o.slug === s;
+          });
+        });
+  if (escolhidas.length === 0 && opcoes.length > 0) escolhidas = [opcoes[0].slug];
+
+  // Slides: só o que foi marcado, na ordem do menu.
+  var slides = opcoes.filter(function (o) {
+    return escolhidas.indexOf(o.slug) >= 0;
+  });
   var slide = slides.length > 0 ? slides[indice % slides.length] : null;
   var cfgPeriodo = PERIODOS.filter(function (p) { return p.id === periodo; })[0] || PERIODOS[1];
   var inicio = formatarData(new Date(Date.now() - cfgPeriodo.dias * 24 * 60 * 60 * 1000));
@@ -208,6 +232,50 @@ export default function ModoTV() {
     [chaveCache] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  var chaveSelecao = escolhidas.join(",");
+  useEffect(
+    function () {
+      setIndice(0);
+    },
+    [chaveSelecao]
+  );
+
+  function alternarLP(slug) {
+    var atual = escolhidas.slice();
+    var pos = atual.indexOf(slug);
+    if (pos >= 0) {
+      if (atual.length === 1) return; // sempre fica pelo menos uma
+      atual.splice(pos, 1);
+    } else {
+      atual.push(slug);
+    }
+    setSelecionadas(atual);
+  }
+
+  function marcarTodas() {
+    setSelecionadas(
+      opcoes.map(function (o) {
+        return o.slug;
+      })
+    );
+  }
+
+  // Menu de LPs: fecha ao clicar fora e com Esc
+  useEffect(
+    function () {
+      menuAbertoRef.current = menuAberto;
+      if (!menuAberto) return;
+      function fora(e) {
+        if (menuRef.current && !menuRef.current.contains(e.target)) setMenuAberto(false);
+      }
+      document.addEventListener("mousedown", fora);
+      return function () {
+        document.removeEventListener("mousedown", fora);
+      };
+    },
+    [menuAberto]
+  );
+
   // Rotação automática
   useEffect(
     function () {
@@ -244,6 +312,7 @@ export default function ModoTV() {
     setControlesVisiveis(true);
     clearTimeout(temporizador.current);
     temporizador.current = setTimeout(function () {
+      if (menuAbertoRef.current) return; // com o menu aberto os controles ficam
       setControlesVisiveis(false);
     }, 3500);
   }
@@ -251,7 +320,8 @@ export default function ModoTV() {
   useEffect(function () {
     mostrarControles();
     function tecla(e) {
-      if (e.key === "ArrowRight") avancar(1);
+      if (e.key === "Escape") setMenuAberto(false);
+      else if (e.key === "ArrowRight") avancar(1);
       else if (e.key === "ArrowLeft") avancar(-1);
       else if (e.key === " ") {
         e.preventDefault();
@@ -307,7 +377,7 @@ export default function ModoTV() {
 
   return (
     <div className={estilos.tv} onMouseMove={mostrarControles}>
-      <div className={estilos.controles + (controlesVisiveis ? " " + estilos.controlesVisiveis : "")}>
+      <div className={estilos.controles + (controlesVisiveis || menuAberto ? " " + estilos.controlesVisiveis : "")}>
         <div className={estilos.grupo} role="group" aria-label="Período">
           {PERIODOS.map(function (p) {
             return (
@@ -337,6 +407,48 @@ export default function ModoTV() {
               </button>
             );
           })}
+        </div>
+        <div className={estilos.menuLPs} ref={menuRef}>
+          <button
+            className={estilos.opcaoLPs}
+            aria-expanded={menuAberto}
+            aria-haspopup="true"
+            onClick={function () {
+              setMenuAberto(!menuAberto);
+            }}
+          >
+            <Icone nome="painel" tamanho={16} />
+            LPs ({slides.length}/{opcoes.length})
+          </button>
+          {menuAberto && (
+            <div className={estilos.menu} role="group" aria-label="LPs exibidas na TV">
+              <div className={estilos.menuTitulo}>Mostrar na TV</div>
+              {opcoes.map(function (o) {
+                var marcada = escolhidas.indexOf(o.slug) >= 0;
+                var ultima = marcada && escolhidas.length === 1;
+                return (
+                  <label key={o.slug} className={estilos.menuItem} title={ultima ? "Pelo menos uma LP precisa ficar marcada" : undefined}>
+                    <input
+                      type="checkbox"
+                      checked={marcada}
+                      disabled={ultima}
+                      onChange={function () {
+                        alternarLP(o.slug);
+                      }}
+                    />
+                    <PontoLP site={o.slug === "todas" ? null : o} tamanho={10} />
+                    <span>{o.slug === "todas" ? "Todas as LPs (soma)" : o.nome}</span>
+                  </label>
+                );
+              })}
+              <div className={estilos.menuRodape}>
+                <button type="button" className={estilos.menuLink} onClick={marcarTodas}>
+                  Marcar todas
+                </button>
+                <span>Com mais de uma marcada, aperte o play para alternar sozinho.</span>
+              </div>
+            </div>
+          )}
         </div>
         <button className={estilos.botao} onClick={function () { avancar(-1); }} aria-label="LP anterior">
           <Icone nome="chevron" tamanho={20} className={estilos.giraEsq} />

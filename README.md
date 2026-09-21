@@ -284,10 +284,13 @@ Na tag "Solicitação HTTP" vinculada ao trigger "Todos os Eventos - GA4":
   pico e resultado (cards, conversões ou cliques). No filtro "Hoje" ele compara
   com ontem só até a mesma hora (`?ateAgora=1` em `/api/stats`), pra não
   parecer queda só porque o dia ainda não acabou.
-- **`/tv` (modo TV)**: painel de números grandes que alterna sozinho entre
-  "todas as LPs" e cada LP. Período (hoje, 7 ou 30 dias) e tempo em cada
-  LP (10, 20 ou 30s) ficam salvos no navegador. Os controles aparecem ao
-  mexer o mouse; teclas: ← e → trocam de LP, espaço pausa, F tela cheia.
+- **`/tv` (modo TV)**: painel de números grandes. Ao abrir, mostra "Todas as LPs"
+  e fica **pausado**; aperte o play para alternar sozinho entre as LPs. O botão
+  "LPs" escolhe quais entram (a soma de todas e/ou cada LP; pelo menos uma fica
+  marcada). Período (hoje, 7 ou 30 dias), tempo em cada LP (10, 20 ou 30s) e as
+  LPs escolhidas ficam salvos no navegador; o play não (sempre abre pausado).
+  Os controles aparecem ao mexer o mouse; teclas: ← e → trocam de LP (mesmo
+  pausado), espaço pausa/retoma, F tela cheia, Esc fecha o menu de LPs.
 - **Menu lateral e tema**: o menu fica fixo à esquerda (gaveta no celular) e
   a barra de filtros acompanha a rolagem. O botão "Tema claro/escuro" no
   menu guarda a escolha no navegador (padrão: escuro).
