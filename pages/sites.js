@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import Shell from "../components/Shell";
+import SeletorCor from "../components/SeletorCor";
+import { PontoLP } from "../components/coresLP";
 
 export default function CadastroSites() {
   const [sites, setSites] = useState([]);
   const [nome, setNome] = useState("");
   const [dominio, setDominio] = useState("");
+  const [cor, setCor] = useState("");
   const [mensagem, setMensagem] = useState("");
   const [editando, setEditando] = useState(null); // guarda o site em edição, ou null
 
@@ -25,7 +28,7 @@ export default function CadastroSites() {
     fetch("/api/sites", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nome: nome, dominio: dominio }),
+      body: JSON.stringify({ nome: nome, dominio: dominio, cor: cor }),
     })
       .then(function (r) {
         return r.json().then(function (dados) {
@@ -34,9 +37,16 @@ export default function CadastroSites() {
       })
       .then(function (resultado) {
         if (resultado.status === 201) {
-          setMensagem("LP cadastrada! Slug: " + resultado.dados.slug);
+          setMensagem(
+            "LP cadastrada! Slug: " +
+              resultado.dados.slug +
+              (resultado.dados.corSalva === false
+                ? ". A cor não foi salva: falta rodar o db/migration-4.sql no banco (veja o README)."
+                : "")
+          );
           setNome("");
           setDominio("");
+          setCor("");
           carregarSites();
         } else {
           setMensagem(resultado.dados.erro || "Erro ao cadastrar");
@@ -45,7 +55,7 @@ export default function CadastroSites() {
   }
 
   function iniciarEdicao(site) {
-    setEditando({ id: site.id, nome: site.nome, dominio: site.dominio || "" });
+    setEditando({ id: site.id, nome: site.nome, dominio: site.dominio || "", cor: site.cor || "" });
   }
 
   function salvarEdicao(e) {
@@ -57,6 +67,11 @@ export default function CadastroSites() {
       body: JSON.stringify(editando),
     }).then(function (r) {
       if (r.ok) {
+        r.json().then(function (dados) {
+          if (dados && dados.corSalva === false) {
+            setMensagem("A cor não foi salva: falta rodar o db/migration-4.sql no banco (veja o README).");
+          }
+        });
         setEditando(null);
         carregarSites();
       }
@@ -97,6 +112,9 @@ export default function CadastroSites() {
           placeholder="Ex: beauty.relinq.com"
         />
 
+        <label>Cor de destaque (opcional)</label>
+        <SeletorCor valor={cor} aoMudar={setCor} />
+
         <button className="btn" type="submit">
           Cadastrar
         </button>
@@ -122,7 +140,12 @@ export default function CadastroSites() {
               {sites.map(function (s) {
                 return (
                   <tr key={s.slug}>
-                    <td>{s.nome}</td>
+                    <td>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                        <PontoLP site={s} />
+                        {s.nome}
+                      </span>
+                    </td>
                     <td>
                       <code>{s.slug}</code>
                     </td>
@@ -167,6 +190,14 @@ export default function CadastroSites() {
               value={editando.dominio}
               onChange={function (e) {
                 setEditando(Object.assign({}, editando, { dominio: e.target.value }));
+              }}
+            />
+
+            <label>Cor de destaque</label>
+            <SeletorCor
+              valor={editando.cor}
+              aoMudar={function (nova) {
+                setEditando(Object.assign({}, editando, { cor: nova }));
               }}
             />
 

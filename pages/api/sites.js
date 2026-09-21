@@ -9,18 +9,40 @@ function gerarSlug(nome) {
     .replace(/(^-|-$)/g, "");
 }
 
+const RE_COR = /^#[0-9a-fA-F]{6}$/;
+
+// A coluna "cor" vem da migration-4. Sem ela, tudo continua funcionando
+// (as LPs usam uma cor automática) — só não dá pra salvar a cor escolhida.
+let colunaCorExiste = false;
+
+async function verificarColunaCor(pool) {
+  if (colunaCorExiste) return true;
+  try {
+    const [rows] = await pool.query("SHOW COLUMNS FROM sites LIKE 'cor'");
+    colunaCorExiste = rows.length > 0;
+  } catch (e) {
+    colunaCorExiste = false;
+  }
+  return colunaCorExiste;
+}
+
+function normalizarCor(cor) {
+  return typeof cor === "string" && RE_COR.test(cor) ? cor : null;
+}
+
 export default async function handler(req, res) {
   const pool = getPool();
 
   if (req.method === "GET") {
+    const temCor = await verificarColunaCor(pool);
     const [rows] = await pool.query(
-      "SELECT id, slug, nome, dominio, criado_em FROM sites ORDER BY nome"
+      "SELECT id, slug, nome, dominio, criado_em" + (temCor ? ", cor" : "") + " FROM sites ORDER BY nome"
     );
     return res.status(200).json(rows);
   }
 
   if (req.method === "POST") {
-    const { nome, dominio } = req.body || {};
+    const { nome, dominio, cor } = req.body || {};
 
     if (!nome) {
       return res.status(400).json({ erro: "Campo 'nome' é obrigatório" });
@@ -29,11 +51,20 @@ export default async function handler(req, res) {
     const slug = gerarSlug(nome);
 
     try {
-      await pool.query(
-        "INSERT INTO sites (slug, nome, dominio) VALUES (?, ?, ?)",
-        [slug, nome, dominio || null]
-      );
-      return res.status(201).json({ ok: true, slug });
+      const temCor = await verificarColunaCor(pool);
+      const corEscolhida = normalizarCor(cor);
+      if (temCor) {
+        await pool.query(
+          "INSERT INTO sites (slug, nome, dominio, cor) VALUES (?, ?, ?, ?)",
+          [slug, nome, dominio || null, corEscolhida]
+        );
+      } else {
+        await pool.query(
+          "INSERT INTO sites (slug, nome, dominio) VALUES (?, ?, ?)",
+          [slug, nome, dominio || null]
+        );
+      }
+      return res.status(201).json({ ok: true, slug, corSalva: temCor || !corEscolhida });
     } catch (erro) {
       if (erro.code === "ER_DUP_ENTRY") {
         return res.status(409).json({ erro: "Já existe um site com esse nome/slug" });
@@ -44,18 +75,27 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "PUT") {
-    const { id, nome, dominio } = req.body || {};
+    const { id, nome, dominio, cor } = req.body || {};
 
     if (!id || !nome) {
       return res.status(400).json({ erro: "Campos 'id' e 'nome' são obrigatórios" });
     }
 
     try {
-      await pool.query(
-        "UPDATE sites SET nome = ?, dominio = ? WHERE id = ?",
-        [nome, dominio || null, id]
-      );
-      return res.status(200).json({ ok: true });
+      const temCor = await verificarColunaCor(pool);
+      const corEscolhida = normalizarCor(cor);
+      if (temCor) {
+        await pool.query(
+          "UPDATE sites SET nome = ?, dominio = ?, cor = ? WHERE id = ?",
+          [nome, dominio || null, corEscolhida, id]
+        );
+      } else {
+        await pool.query(
+          "UPDATE sites SET nome = ?, dominio = ? WHERE id = ?",
+          [nome, dominio || null, id]
+        );
+      }
+      return res.status(200).json({ ok: true, corSalva: temCor || !corEscolhida });
     } catch (erro) {
       console.error("Erro ao editar site:", erro);
       return res.status(500).json({ erro: "Erro interno ao editar site" });

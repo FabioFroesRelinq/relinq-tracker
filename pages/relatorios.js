@@ -4,9 +4,11 @@ import Relogio from "../components/Relogio";
 import Shell from "../components/Shell";
 import Secao from "../components/Secao";
 import CartaoKpi from "../components/CartaoKpi";
+import { ResumoRelatorio } from "../components/Resumo";
 import EstadoVazio from "../components/EstadoVazio";
 import Esqueleto from "../components/Esqueleto";
 import Icone from "../components/Icones";
+import { PontoLP, corDaLP, corTextoSobre } from "../components/coresLP";
 import { Delta, DeltaPP, variacao } from "../components/Delta";
 import estilos from "../styles/relatorios.module.css";
 
@@ -494,6 +496,11 @@ export default function Relatorios() {
 
   // ----- Dados derivados -----
 
+  var mapaSites = {};
+  sites.forEach(function (s) {
+    mapaSites[s.slug] = s;
+  });
+
   var comparando = !!(dados && dados.anterior);
   var atual = dados ? derivar(dados.total.atual) : null;
   var anterior = dados && dados.total.anterior ? derivar(dados.total.anterior) : null;
@@ -625,10 +632,16 @@ export default function Relatorios() {
                 key={s.slug}
                 className={estilos.chip + (ativo ? " " + estilos.chipAtivo : "")}
                 aria-pressed={ativo}
+                style={
+                  ativo
+                    ? { background: corDaLP(s), borderColor: corDaLP(s), color: corTextoSobre(corDaLP(s)) }
+                    : undefined
+                }
                 onClick={function () {
                   alternarSite(s.slug);
                 }}
               >
+                <PontoLP site={s} tamanho={8} cor={ativo ? corTextoSobre(corDaLP(s)) : undefined} />
                 {s.nome}
               </button>
             );
@@ -695,6 +708,14 @@ export default function Relatorios() {
       {!carregando && !erro && dados && !semDados && (
         <div>
           {/* --- Cards --- */}
+          <ResumoRelatorio
+            dados={dados}
+            atual={atual}
+            anterior={anterior}
+            escopo={selecionados.length === 1 && mapaSites[selecionados[0]] ? mapaSites[selecionados[0]].nome : selecionados.length === 0 || selecionados.length === sites.length ? "as LPs" : "as LPs escolhidas"}
+            plural={!(selecionados.length === 1 && mapaSites[selecionados[0]])}
+          />
+
           <div className="cards">
             <CartaoKpi
               rotulo="Visitantes únicos"
@@ -877,7 +898,12 @@ export default function Relatorios() {
                   {linhasLP.map(function (l) {
                     return (
                       <tr key={l.slug}>
-                        <td>{l.nome}</td>
+                        <td>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                            <PontoLP site={mapaSites[l.slug] || null} />
+                            {l.nome}
+                          </span>
+                        </td>
                         {celulasLP(l.a, l.p)}
                       </tr>
                     );

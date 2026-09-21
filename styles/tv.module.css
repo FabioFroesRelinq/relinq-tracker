@@ -25,6 +25,12 @@
   line-height: 1.05;
 }
 
+.pontoTitulo {
+  display: inline-flex;
+  margin-right: 0.45em;
+  vertical-align: 0.12em;
+}
+
 .periodo {
   margin: 0.8vh 0 0;
   font-size: clamp(1rem, 1.6vw, 1.7rem);

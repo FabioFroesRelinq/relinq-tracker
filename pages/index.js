@@ -9,6 +9,8 @@ import CartaoKpi from "../components/CartaoKpi";
 import EstadoVazio from "../components/EstadoVazio";
 import Esqueleto from "../components/Esqueleto";
 import { Delta, DeltaPP, variacao } from "../components/Delta";
+import { PontoLP, corDaLP } from "../components/coresLP";
+import { ResumoPainel } from "../components/Resumo";
 
 function ehClique(tipoEvento) {
   return tipoEvento.indexOf("clique_") === 0;
@@ -316,6 +318,13 @@ export default function Dashboard() {
   const cliquesTotais = stats ? somarTodosCliques(stats.totaisPorTipo) : 0;
   const taxaConversao = visitas > 0 ? ((conversoes / visitas) * 100).toFixed(1) : "0.0";
   const k = kpisDe(stats);
+  const siteAtual =
+    siteSelecionado && siteSelecionado !== "todas"
+      ? sites.filter(function (s) {
+          return s.slug === siteSelecionado;
+        })[0] || null
+      : null;
+  const corPrincipal = siteAtual ? corDaLP(siteAtual) : "#6366f1";
   const kAnt = kpisDe(statsAnterior);
 
   const origemAgrupada = stats ? agruparPorChave(stats.porOrigem, "utm_source") : {};
@@ -398,21 +407,24 @@ export default function Dashboard() {
         <>
           <div className="barra-filtros">
           <div className="filtros">
-            <select
-              value={siteSelecionado}
-              onChange={function (e) {
-                setSiteSelecionado(e.target.value);
-              }}
-            >
-              <option value="todas">Todas as LPs juntas</option>
-              {sites.map(function (s) {
-                return (
-                  <option key={s.slug} value={s.slug}>
-                    {s.nome}
-                  </option>
-                );
-              })}
-            </select>
+            <span className="select-lp">
+              <PontoLP site={siteAtual} tamanho={10} />
+              <select
+                value={siteSelecionado}
+                onChange={function (e) {
+                  setSiteSelecionado(e.target.value);
+                }}
+              >
+                <option value="todas">Todas as LPs juntas</option>
+                {sites.map(function (s) {
+                  return (
+                    <option key={s.slug} value={s.slug}>
+                      {s.nome}
+                    </option>
+                  );
+                })}
+              </select>
+            </span>
             <input
               type="date"
               value={dataInicio}
@@ -448,11 +460,19 @@ export default function Dashboard() {
 
           {!carregando && stats && (
             <>
+              <ResumoPainel
+                stats={stats}
+                k={k}
+                kAnt={kAnt}
+                nomeLP={siteAtual ? siteAtual.nome : "a LP"}
+                todas={!siteAtual}
+              />
+
               <div className="cards">
                 <CartaoKpi
                   rotulo="Visitantes únicos"
                   valor={fmtN(k.visitantes)}
-                  acento="#6366f1"
+                  acento={corPrincipal}
                   serie={serieDe(stats, "visitantes")}
                   rodape={kAnt && <RodapeDelta atual={k.visitantes} anterior={kAnt.visitantes} formatar={fmtN} />}
                 />

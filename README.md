@@ -26,6 +26,7 @@ uma nova publicação.
    mysql -u root -p < db/schema.sql
    mysql -u root -p relinq_tracker_db < db/migration-2.sql
    mysql -u root -p relinq_tracker_db < db/migration-3.sql
+   mysql -u root -p relinq_tracker_db < db/migration-4.sql   # cor das LPs (opcional)
    ```
    Na Hostinger (via phpMyAdmin), é o mesmo conteúdo, só sem os comandos
    `CREATE DATABASE`/`USE` — cole direto com o banco certo já selecionado.
@@ -266,6 +267,21 @@ Na tag "Solicitação HTTP" vinculada ao trigger "Todos os Eventos - GA4":
   resumo em CSV. O tempo médio limita cada medição a 30 min
   (`TEMPO_MAXIMO_SEGUNDOS` em `pages/api/relatorios.js`) pra uma aba
   esquecida aberta não distorcer a média.
+- **`/saude` (saúde do tracking)**: um cartão por LP com semáforo (verde: evento
+  na última hora; âmbar: entre 1 h e 24 h; vermelho: mais de 24 h sem eventos),
+  último evento e última visita, eventos por hora nas últimas 24 h, o que
+  chegou nos últimos 7 dias (visitas, rolagem e tempo na página são enviados
+  sozinhos pelo `tracker.js`; se algum não chega, o script da LP pode estar
+  desatualizado), % de visitantes identificados, % de visitas com UTM e o botão
+  "Copiar script de instalação" já com o `data-site` da LP. Atualiza a cada 30s.
+  As idades são calculadas no banco (`NOW()`), sem depender de fuso.
+- **Cor de cada LP**: escolhida em "Cadastrar LP" (paleta ou cor livre) e usada
+  em chips, tabelas, no seletor do painel e no modo TV. Para salvar a cor,
+  rode uma vez `db/migration-4.sql` no banco. Sem isso nada quebra: cada LP
+  usa uma cor automática e o cadastro avisa que a cor não foi salva.
+- **Resumo em uma frase**: no topo do painel e dos relatórios, um texto com
+  visitantes, variação contra o período anterior, melhor origem, horário de
+  pico e resultado (cards, conversões ou cliques).
 - **`/tv` (modo TV)**: painel de números grandes que alterna sozinho entre
   "todas as LPs" e cada LP. Período (hoje, 7 ou 30 dias) e tempo em cada
   LP (10, 20 ou 30s) ficam salvos no navegador. Os controles aparecem ao
@@ -303,6 +319,12 @@ relinq-tracker/
   lib/auth-edge.js         -> mesma verificação de sessão, versão Edge Runtime (middleware)
   middleware.js             -> protege o painel e as APIs internas, exige login
   components/Relogio.js      -> relógio ao vivo no cabeçalho do painel
+  components/Resumo.js         -> resumo em linguagem natural (painel e relatórios)
+  components/coresLP.js         -> cores das LPs e bolinha colorida
+  components/SeletorCor.js       -> escolha de cor no cadastro de LPs
+  pages/saude.js                  -> saúde do tracking por LP
+  pages/api/saude.js               -> dados da saúde do tracking (protegida)
+  db/migration-4.sql                -> coluna "cor" da tabela sites
   components/Shell.js          -> menu lateral, cabeçalho da página e tema claro/escuro
   components/CartaoKpi.js       -> card de número com mini gráfico (sparkline)
   components/Delta.js            -> variação ▲▼ (% e pontos percentuais)

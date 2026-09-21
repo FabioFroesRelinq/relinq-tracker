@@ -3,6 +3,7 @@ import Link from "next/link";
 import Relogio from "../components/Relogio";
 import Icone from "../components/Icones";
 import CartaoKpi, { Sparkline } from "../components/CartaoKpi";
+import { PontoLP, corDaLP } from "../components/coresLP";
 import estilos from "../styles/tv.module.css";
 
 var PERIODOS = [
@@ -296,7 +297,12 @@ export default function ModoTV() {
         <>
           <header className={estilos.topo}>
             <div>
-              <h1 className={estilos.titulo}>{slide.nome}</h1>
+              <h1 className={estilos.titulo}>
+                <span className={estilos.pontoTitulo}>
+                  <PontoLP site={slide.slug === "todas" ? null : slide} tamanho={26} />
+                </span>
+                {slide.nome}
+              </h1>
               <p className={estilos.periodo}>
                 {cfgPeriodo.rotulo === "Hoje" ? "Hoje" : "Últimos " + cfgPeriodo.rotulo}
                 {slides.length > 1 ? " · " + ((indice % slides.length) + 1) + " de " + slides.length : ""}
@@ -317,7 +323,7 @@ export default function ModoTV() {
           ) : (
             <>
               <div className={estilos.grade}>
-                <CartaoKpi rotulo="Visitantes únicos" valor={fmtN(visitantes)} acento="#6366f1" serie={serie(dados, "visitantes")} />
+                <CartaoKpi rotulo="Visitantes únicos" valor={fmtN(visitantes)} acento={slide.slug === "todas" ? "#6366f1" : corDaLP(slide)} serie={serie(dados, "visitantes")} />
                 <CartaoKpi rotulo="Cliques" valor={fmtN(cliques)} acento="#f59e0b" serie={serie(dados, "cliques")} />
                 {cards > 0 ? (
                   <>

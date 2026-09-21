@@ -584,6 +584,23 @@ tbody tr:last-child td {
   background: var(--superficie-3);
 }
 
+/* Seletor de LP com a bolinha da cor dela */
+.select-lp {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.select-lp > span {
+  position: absolute;
+  left: 13px;
+  pointer-events: none;
+}
+
+.select-lp select {
+  padding-left: 32px;
+}
+
 /* --- Textos de apoio e estados --- */
 .vazio {
   color: var(--texto-mudo);
@@ -632,6 +649,32 @@ tbody tr:last-child td {
   color: var(--perigo);
   font-size: 0.85rem;
   margin: -8px 0 16px;
+}
+
+/* --- Resumo em linguagem natural --- */
+.resumo {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 20px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: var(--primaria-suave);
+  color: var(--texto-medio);
+  font-size: 0.98rem;
+  line-height: 1.6;
+}
+
+.resumo strong {
+  color: var(--texto-forte);
+  font-weight: 700;
+}
+
+.resumo-icone {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--primaria-texto);
 }
 
 /* --- Esqueleto de carregamento --- */

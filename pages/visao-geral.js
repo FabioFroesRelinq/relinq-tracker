@@ -4,6 +4,7 @@ import Relogio from "../components/Relogio";
 import Shell from "../components/Shell";
 import EstadoVazio from "../components/EstadoVazio";
 import Esqueleto from "../components/Esqueleto";
+import { PontoLP } from "../components/coresLP";
 
 function formatarData(date) {
   return date.toISOString().slice(0, 10);
@@ -16,6 +17,23 @@ export default function VisaoGeral() {
   const [dataFim, setDataFim] = useState(formatarData(new Date()));
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(true);
+  const [infoSites, setInfoSites] = useState({}); // slug -> LP (pra pegar a cor)
+
+  useEffect(function () {
+    fetch("/api/sites")
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (lista) {
+        if (!Array.isArray(lista)) return;
+        var mapa = {};
+        lista.forEach(function (s) {
+          mapa[s.slug] = s;
+        });
+        setInfoSites(mapa);
+      })
+      .catch(function () {});
+  }, []);
 
   useEffect(
     function () {
@@ -103,7 +121,12 @@ export default function VisaoGeral() {
               {dados.sites.map(function (s) {
                 return (
                   <tr key={s.slug}>
-                    <td>{s.nome}</td>
+                    <td>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                        <PontoLP site={infoSites[s.slug] || { id: s.id }} />
+                        {s.nome}
+                      </span>
+                    </td>
                     <td>{s.visitas}</td>
                     <td>{s.cliques}</td>
                     <td>{s.conversoes}</td>
