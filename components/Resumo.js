@@ -1,4 +1,5 @@
 import Icone from "./Icones";
+import { nomeEstado } from "./geo";
 
 var nf = new Intl.NumberFormat("pt-BR");
 var nf1 = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -81,6 +82,17 @@ function maiorOrigem(stats) {
   return { nome: chaves[0], pct: (soma[chaves[0]] / total) * 100 };
 }
 
+// Estado com mais visitantes (entre os que têm localização).
+function maiorEstado(stats) {
+  var g = stats.geografia;
+  if (!g || !g.disponivel || !g.porEstado || g.porEstado.length === 0 || !g.visitantesComLocalizacao) return null;
+  var topo = g.porEstado[0];
+  return {
+    nome: nomeEstado(topo.pais, topo.estado),
+    pct: Math.min(100, (topo.visitantes / g.visitantesComLocalizacao) * 100),
+  };
+}
+
 function horaDePico(stats) {
   var porHora = {};
   (stats.mapaCalor || []).forEach(function (l) {
@@ -112,6 +124,7 @@ export function ResumoPainel({ stats, k, kAnt, nomeLP, todas }) {
   var variacao = kAnt ? fraseVariacao(k.visitantes, kAnt.visitantes, false, parcial) : null;
   var origem = maiorOrigem(stats);
   var pico = horaDePico(stats);
+  var estado = maiorEstado(stats);
 
   var partes = [];
   if (origem) {
@@ -120,6 +133,15 @@ export function ResumoPainel({ stats, k, kAnt, nomeLP, todas }) {
         <>
           {primeiro ? "A" : "a"} maior parte veio de{" "}
           {origem.nome === "direto" ? <F>acesso direto</F> : <F>{origem.nome}</F>} ({fmtPct1(origem.pct)} das visitas)
+        </>
+      );
+    });
+  }
+  if (estado) {
+    partes.push(function (primeiro) {
+      return (
+        <>
+          {primeiro ? "O" : "o"}s visitantes vêm principalmente de <F>{estado.nome}</F> ({fmtPct1(estado.pct)} dos que têm localização)
         </>
       );
     });

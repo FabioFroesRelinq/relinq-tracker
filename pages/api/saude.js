@@ -20,6 +20,15 @@ function categoria(tipo) {
   return tipo;
 }
 
+async function temColunaEstado(pool) {
+  try {
+    const [linhas] = await pool.query("SHOW COLUMNS FROM events LIKE 'estado'");
+    return linhas.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
 function numero(v) {
   return Number(v) || 0;
 }
@@ -75,6 +84,24 @@ export default async function handler(req, res) {
          GROUP BY site_id`
       ),
     ]);
+
+    // % de visitas com localização (só existe depois da migration-5): serve pra
+    // conferir que o recurso está funcionando na Vercel.
+    const geoPorSite = new Map();
+    try {
+      const [linhasGeo] = await pool.query(
+        `SELECT site_id, SUM(tipo_evento = 'visita' AND estado IS NOT NULL) AS visitas_geo
+         FROM events
+         WHERE criado_em >= NOW() - INTERVAL 7 DAY
+         GROUP BY site_id`
+      );
+      linhasGeo.forEach(function (l) {
+        geoPorSite.set(Number(l.site_id), numero(l.visitas_geo));
+      });
+    } catch (e) {
+      // sem a migration-5: a Saúde simplesmente não mostra esse item
+    }
+    const geoDisponivel = geoPorSite.size > 0 || (await temColunaEstado(pool));
 
     const ultimoPorSite = new Map();
     resUltimo[0].forEach(function (l) {
@@ -132,6 +159,7 @@ export default async function handler(req, res) {
           eventos7d: q.eventos,
           identificados: q.eventos > 0 ? ((q.eventos - q.semVisitor) / q.eventos) * 100 : null,
           comOrigem: q.visitas > 0 ? (q.visitasUtm / q.visitas) * 100 : null,
+          comLocalizacao: geoDisponivel && q.visitas > 0 ? ((geoPorSite.get(id) || 0) / q.visitas) * 100 : null,
         },
       };
     });

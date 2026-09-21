@@ -985,6 +985,28 @@ svg text { font-family: var(--fonte); }
   margin-bottom: 6px;
 }
 
+/* --- Geografia --- */
+.geo-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+}
+
+.geo-grid .barra-h-linha {
+  grid-template-columns: minmax(150px, 270px) 1fr 44px;
+}
+
+.geo-cards {
+  color: var(--texto-mudo);
+  font-weight: 400;
+}
+
+@media (max-width: 900px) {
+  .geo-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* --- Funil --- */
 .funil {
   display: flex;

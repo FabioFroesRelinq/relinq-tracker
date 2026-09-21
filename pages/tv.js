@@ -7,6 +7,7 @@ import { PontoLP, corDaLP } from "../components/coresLP";
 import { ResumoPainel } from "../components/Resumo";
 import AvisosCards from "../components/AvisosCards";
 import nomeFuso from "../components/nomeFuso";
+import { nomeEstado } from "../components/geo";
 import useAvisoCards, { tocarSom } from "../components/useAvisoCards";
 import estilos from "../styles/tv.module.css";
 
@@ -384,6 +385,13 @@ export default function ModoTV() {
   var maxClique = topCliques.reduce(function (m, c) { return Math.max(m, c.total); }, 1);
   var disp = dados ? dados.engajamento.porDispositivo : [];
   var totalDisp = disp.reduce(function (s, d) { return s + d.total; }, 0);
+  var geo = dados ? dados.geografia : null;
+  var estadosTv =
+    geo && geo.disponivel && geo.visitantesComLocalizacao > 0
+      ? geo.porEstado.slice(0, 3).map(function (e) {
+          return { chave: (e.pais || "") + e.estado, nome: nomeEstado(e.pais, e.estado), pct: Math.min(100, (e.visitantes / geo.visitantesComLocalizacao) * 100) };
+        })
+      : [];
   var nomesDisp = { mobile: "Celular", desktop: "Computador", tablet: "Tablet" };
 
   return (
@@ -622,6 +630,24 @@ export default function ModoTV() {
                         );
                       })}
                     </div>
+                  )}
+                  {estadosTv.length > 0 && (
+                    <>
+                      <h2 className={estilos.segundoTitulo}>Estados</h2>
+                      <div className={estilos.lista}>
+                        {estadosTv.map(function (e) {
+                          return (
+                            <div key={e.chave} className={estilos.linha}>
+                              <span>{e.nome}</span>
+                              <span className={estilos.barra}>
+                                <span style={{ width: e.pct + "%" }} />
+                              </span>
+                              <strong>{fmtPct1(e.pct)}</strong>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
                   )}
                 </section>
               </div>

@@ -27,6 +27,7 @@ uma nova publicação.
    mysql -u root -p relinq_tracker_db < db/migration-2.sql
    mysql -u root -p relinq_tracker_db < db/migration-3.sql
    mysql -u root -p relinq_tracker_db < db/migration-4.sql   # cor das LPs (opcional)
+   mysql -u root -p relinq_tracker_db < db/migration-5.sql   # geografia dos visitantes (opcional)
    ```
    Na Hostinger (via phpMyAdmin), é o mesmo conteúdo, só sem os comandos
    `CREATE DATABASE`/`USE` — cole direto com o banco certo já selecionado.
@@ -267,6 +268,19 @@ Na tag "Solicitação HTTP" vinculada ao trigger "Todos os Eventos - GA4":
   resumo em CSV. O tempo médio limita cada medição a 30 min
   (`TEMPO_MAXIMO_SEGUNDOS` em `pages/api/relatorios.js`) pra uma aba
   esquecida aberta não distorcer a média.
+- **Geografia ("De onde vêm os visitantes")**: ranking de estados e cidades dos
+  visitantes, com quantos cards cada um gerou, uma frase no resumo e os estados
+  na TV. O `/api/track` lê os cabeçalhos que a **Vercel** envia
+  (`x-vercel-ip-country`, `x-vercel-ip-country-region`, `x-vercel-ip-city`) e grava
+  só país, estado e cidade; **o IP nunca é guardado**. Para ativar, rode uma vez
+  `db/migration-5.sql` no banco. Antes disso o tracker segue gravando normalmente,
+  sem localização (ele confere as colunas sozinho, no máximo 1 min depois da
+  migration). Só eventos novos têm localização; os antigos ficam em branco. Chamadas
+  do GTM server-side não recebem localização (o IP delas é o do servidor do GTM).
+  Fora da Vercel (ex: `npm run dev`) os cabeçalhos não existem. A cidade é
+  aproximada (em celular a operadora pode indicar outra cidade); o estado é mais
+  confiável. A tela **Saúde do tracking** mostra "Visitas com localização" por LP
+  pra conferir que está funcionando.
 - **Avisos de "Novo card criado"**: em qualquer página do painel aparece um
   popup (LP, origem e campanha, sem dado pessoal) quando um card é criado. O
   painel consulta `/api/cards-novos` a cada 15s; ao abrir, só marca o ponto de
@@ -338,6 +352,8 @@ relinq-tracker/
   middleware.js             -> protege o painel e as APIs internas, exige login
   components/Relogio.js      -> relógio ao vivo no cabeçalho do painel
   components/Resumo.js         -> resumo em linguagem natural (painel e relatórios)
+  components/geo.js              -> nomes dos estados e cidades (sigla -> nome)
+  db/migration-5.sql              -> colunas pais/estado/cidade em events (geografia)
   components/useAvisoCards.js   -> consulta cards novos, popup, som e notificação do sistema
   components/AvisosCards.js      -> popup "Novo card criado"
   components/MenuAvisos.js        -> sino do menu lateral (preferências dos avisos)

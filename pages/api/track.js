@@ -57,6 +57,55 @@ function requisicaoAutenticadaPeloGtm(req) {
   return crypto.timingSafeEqual(bufferEsperado, bufferRecebido);
 }
 
+// --- Localização aproximada ---
+// A Vercel informa país, estado e cidade de quem fez a requisição nos
+// cabeçalhos abaixo. Guardamos SÓ esses três campos: o IP nunca é gravado.
+// Chamadas do GTM server-side não entram: o IP delas é o do servidor do GTM,
+// então a localização seria a errada.
+function localizacaoDaRequisicao(req) {
+  const pais = String(req.headers["x-vercel-ip-country"] || "").toUpperCase();
+  const regiao = String(req.headers["x-vercel-ip-country-region"] || "");
+  const cidadeBruta = String(req.headers["x-vercel-ip-city"] || "");
+
+  let cidade = null;
+  try {
+    // A cidade vem codificada (ex: "S%C3%A3o%20Paulo").
+    cidade =
+      decodeURIComponent(cidadeBruta)
+        .replace(/[\u0000-\u001f\u007f]/g, "")
+        .trim()
+        .slice(0, 100) || null;
+  } catch (e) {
+    cidade = null;
+  }
+
+  return {
+    pais: /^[A-Z]{2}$/.test(pais) ? pais : null,
+    estado: /^[A-Za-z0-9-]{1,10}$/.test(regiao) ? regiao.toUpperCase() : null,
+    cidade,
+  };
+}
+
+// As colunas pais/estado/cidade vêm da migration-5. Enquanto ela não rodar, o
+// tracker segue gravando do jeito antigo (nunca deixa de coletar por causa disso).
+let geoCache = { existe: false, ate: 0 };
+
+async function colunasGeoExistem(pool) {
+  const agora = Date.now();
+  if (agora < geoCache.ate) return geoCache.existe;
+  try {
+    const [linhas] = await pool.query(
+      "SHOW COLUMNS FROM events WHERE Field IN ('pais', 'estado', 'cidade')"
+    );
+    const existe = linhas.length === 3;
+    // Achou: confere de novo em 1 h. Não achou: tenta de novo em 1 min (logo após rodar a migration).
+    geoCache = { existe, ate: agora + (existe ? 3600000 : 60000) };
+  } catch (e) {
+    geoCache = { existe: false, ate: agora + 60000 };
+  }
+  return geoCache.existe;
+}
+
 export default async function handler(req, res) {
   const vemDoGtm = requisicaoAutenticadaPeloGtm(req);
 
@@ -147,26 +196,38 @@ export default async function handler(req, res) {
 
     const siteId = siteRows[0].id;
 
-    await pool.query(
-      `INSERT INTO events
-        (site_id, tipo_evento, rotulo, pagina, video_id, valor, visitor_id, dispositivo, utm_source, utm_medium, utm_campaign, utm_content, utm_term)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        siteId,
-        evento,
-        rotulo || null,
-        pagina || null,
-        video_id || null,
-        valor === undefined || valor === null ? null : Number(valor),
-        visitor_id || null,
-        dispositivo || null,
-        utm_source || null,
-        utm_medium || null,
-        utm_campaign || null,
-        utm_content || null,
-        utm_term || null,
-      ]
-    );
+    const valores = [
+      siteId,
+      evento,
+      rotulo || null,
+      pagina || null,
+      video_id || null,
+      valor === undefined || valor === null ? null : Number(valor),
+      visitor_id || null,
+      dispositivo || null,
+      utm_source || null,
+      utm_medium || null,
+      utm_campaign || null,
+      utm_content || null,
+      utm_term || null,
+    ];
+
+    if (!vemDoGtm && (await colunasGeoExistem(pool))) {
+      const geo = localizacaoDaRequisicao(req);
+      await pool.query(
+        `INSERT INTO events
+          (site_id, tipo_evento, rotulo, pagina, video_id, valor, visitor_id, dispositivo, utm_source, utm_medium, utm_campaign, utm_content, utm_term, pais, estado, cidade)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        valores.concat([geo.pais, geo.estado, geo.cidade])
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO events
+          (site_id, tipo_evento, rotulo, pagina, video_id, valor, visitor_id, dispositivo, utm_source, utm_medium, utm_campaign, utm_content, utm_term)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        valores
+      );
+    }
 
     return res.status(201).json({ ok: true });
   } catch (erro) {

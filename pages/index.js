@@ -12,6 +12,7 @@ import { Delta, DeltaPP, variacao } from "../components/Delta";
 import { PontoLP, corDaLP } from "../components/coresLP";
 import { ResumoPainel } from "../components/Resumo";
 import nomeFuso from "../components/nomeFuso";
+import { nomeEstado, nomeCidade } from "../components/geo";
 
 function ehClique(tipoEvento) {
   return tipoEvento.indexOf("clique_") === 0;
@@ -586,6 +587,15 @@ export default function Dashboard() {
                 aoAlternar={alternarSecao}
               >
                 <MapaCalor dados={stats.mapaCalor} fuso={stats.fuso} />
+              </Secao>
+
+              <Secao
+                id="geografia"
+                titulo="De onde vêm os visitantes"
+                aberta={!secoesFechadas.geografia}
+                aoAlternar={alternarSecao}
+              >
+                <Geografia geo={stats.geografia} totalVisitantes={k.visitantes} />
               </Secao>
 
               <Secao
@@ -1733,6 +1743,109 @@ function MapaCalor({ dados, fuso }) {
       <p className="valor-secundario" style={{ marginTop: 8 }}>
         Horas no {nomeFuso(fuso ? fuso.exibicaoMin : null)}.
       </p>
+    </div>
+  );
+}
+
+// --- Geografia: estados e cidades dos visitantes ---
+function LinhaGeo({ nome, visitantes, cards, maximo }) {
+  var largura = maximo > 0 ? Math.max(2, (visitantes / maximo) * 100) : 0;
+  return (
+    <div
+      className="barra-h-linha"
+      title={nome + ": " + fmtN(visitantes) + (visitantes === 1 ? " visitante" : " visitantes") + (cards > 0 ? ", " + cards + (cards === 1 ? " card" : " cards") : "")}
+    >
+      <span className="barra-h-rotulo">
+        {nome}
+        {cards > 0 && (
+          <span className="geo-cards">
+            {" "}
+            · {cards} {cards === 1 ? "card" : "cards"}
+          </span>
+        )}
+      </span>
+      <div className="barra-h-trilha">
+        <div className="barra-h-preenchimento" style={{ width: largura + "%", background: "#6366f1" }} />
+      </div>
+      <span className="barra-h-valor">{fmtN(visitantes)}</span>
+    </div>
+  );
+}
+
+function Geografia({ geo, totalVisitantes }) {
+  if (!geo || !geo.disponivel) {
+    return (
+      <EstadoVazio
+        titulo="A localização ainda não está ativada"
+        texto="Rode o db/migration-5.sql no banco. Depois disso, cada visitante novo passa a ter país, estado e cidade (o IP não é guardado)."
+      />
+    );
+  }
+  if (geo.porEstado.length === 0) {
+    return (
+      <EstadoVazio
+        titulo="Nenhum visitante com localização neste período"
+        texto="Só quem chegou depois de ativar a localização tem esse dado; os eventos antigos ficam sem. Se já passou tempo desde a ativação, confira a tela Saúde do tracking."
+      />
+    );
+  }
+
+  var maxEstado = geo.porEstado.reduce(function (m, e) {
+    return Math.max(m, e.visitantes);
+  }, 0);
+  var maxCidade = geo.porCidade.reduce(function (m, c) {
+    return Math.max(m, c.visitantes);
+  }, 0);
+  var cobertura = totalVisitantes > 0 ? Math.min(100, (geo.visitantesComLocalizacao / totalVisitantes) * 100) : null;
+
+  return (
+    <div>
+      {cobertura !== null && (
+        <p className="valor-secundario" style={{ marginTop: 0, marginBottom: 16 }}>
+          Localização identificada em <strong>{fmtPct1(cobertura)}</strong> dos visitantes únicos do período.
+        </p>
+      )}
+      <div className="geo-grid">
+        <div>
+          <h3 className="grafico-subtitulo">Estados</h3>
+          <div className="barras-h">
+            {geo.porEstado.slice(0, 10).map(function (e) {
+              return (
+                <LinhaGeo
+                  key={(e.pais || "") + e.estado}
+                  nome={nomeEstado(e.pais, e.estado)}
+                  visitantes={e.visitantes}
+                  cards={e.cards}
+                  maximo={maxEstado}
+                />
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <h3 className="grafico-subtitulo">Cidades</h3>
+          {geo.porCidade.length === 0 ? (
+            <p className="vazio">Sem cidades identificadas neste período.</p>
+          ) : (
+            <div className="barras-h">
+              {geo.porCidade.slice(0, 10).map(function (c) {
+                return (
+                  <LinhaGeo
+                    key={(c.pais || "") + (c.estado || "") + c.cidade}
+                    nome={nomeCidade(c.pais, c.estado, c.cidade)}
+                    visitantes={c.visitantes}
+                    cards={c.cards}
+                    maximo={maxCidade}
+                  />
+                );
+              })}
+            </div>
+          )}
+          <p className="valor-secundario" style={{ marginTop: 12 }}>
+            A cidade é aproximada: em celular, a operadora às vezes indica outra cidade da região. O estado é mais confiável.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

@@ -178,6 +178,26 @@ function CartaoSaude({ s, copiado, aoCopiar }) {
               <span style={{ width: (s.qualidade.comOrigem || 0) + "%" }} />
             </div>
           </div>
+          {s.qualidade.comLocalizacao != null && (
+            <div>
+              <div className={estilos.medidor}>
+                <span>Visitas com localização</span>
+                <strong>{fmtPct(s.qualidade.comLocalizacao)}</strong>
+              </div>
+              <div className={estilos.trilha}>
+                <span
+                  className={s.qualidade.comLocalizacao === 0 ? estilos.trilhaAlerta : undefined}
+                  style={{ width: s.qualidade.comLocalizacao + "%" }}
+                />
+              </div>
+            </div>
+          )}
+          {s.qualidade.comLocalizacao === 0 && (
+            <p className={estilos.nota}>
+              Nenhuma visita dos últimos 7 dias tem localização. Confira se o db/migration-5.sql foi rodado e se o
+              deploy é o da Vercel (fora dela os cabeçalhos de localização não existem).
+            </p>
+          )}
           {s.qualidade.identificados != null && s.qualidade.identificados < 90 && (
             <p className={estilos.nota}>
               Parte dos eventos chega sem ID de visitante (o navegador bloqueou o armazenamento ou o script é antigo).

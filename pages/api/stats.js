@@ -243,6 +243,62 @@ export default async function handler(req, res) {
       return { dow: Number(l.dow), hora: Number(l.hora), total: Number(l.total) || 0 };
     });
 
+    // --- Geografia (estado e cidade) ---
+    // Colunas da migration-5. Sem elas (ou sem eventos com localização) a
+    // seção mostra uma orientação em vez de números.
+    let geografia = { disponivel: false };
+    try {
+      const [linhasEstado] = await pool.query(
+        `SELECT pais, estado,
+                COUNT(DISTINCT CASE WHEN tipo_evento = 'visita' THEN visitor_id END) AS visitantes,
+                SUM(tipo_evento = 'card_criado') AS cards
+         FROM events
+         WHERE ${condSite}criado_em BETWEEN ? AND ?
+           AND tipo_evento IN ('visita', 'card_criado') AND estado IS NOT NULL
+         GROUP BY pais, estado
+         ORDER BY visitantes DESC, cards DESC
+         LIMIT 30`,
+        filtroData
+      );
+      const [linhasCidade] = await pool.query(
+        `SELECT pais, estado, cidade,
+                COUNT(DISTINCT CASE WHEN tipo_evento = 'visita' THEN visitor_id END) AS visitantes,
+                SUM(tipo_evento = 'card_criado') AS cards
+         FROM events
+         WHERE ${condSite}criado_em BETWEEN ? AND ?
+           AND tipo_evento IN ('visita', 'card_criado') AND cidade IS NOT NULL
+         GROUP BY pais, estado, cidade
+         ORDER BY visitantes DESC, cards DESC
+         LIMIT 15`,
+        filtroData
+      );
+      const [[conhecidos]] = await pool.query(
+        `SELECT COUNT(DISTINCT visitor_id) AS visitantes
+         FROM events
+         WHERE ${condSite}criado_em BETWEEN ? AND ?
+           AND tipo_evento = 'visita' AND estado IS NOT NULL AND visitor_id IS NOT NULL`,
+        filtroData
+      );
+      geografia = {
+        disponivel: true,
+        visitantesComLocalizacao: Number(conhecidos.visitantes) || 0,
+        porEstado: linhasEstado.map(function (l) {
+          return { pais: l.pais, estado: l.estado, visitantes: Number(l.visitantes) || 0, cards: Number(l.cards) || 0 };
+        }),
+        porCidade: linhasCidade.map(function (l) {
+          return {
+            pais: l.pais,
+            estado: l.estado,
+            cidade: l.cidade,
+            visitantes: Number(l.visitantes) || 0,
+            cards: Number(l.cards) || 0,
+          };
+        }),
+      };
+    } catch (e) {
+      geografia = { disponivel: false };
+    }
+
     // --- Dispositivo (mobile/tablet/desktop) ---
     const [porDispositivo] = await pool.query(
       `SELECT COALESCE(dispositivo, 'desconhecido') AS dispositivo, COUNT(*) AS total
@@ -338,6 +394,7 @@ export default async function handler(req, res) {
       cliquesPorRotulo,
       serieKpi,
       mapaCalor,
+      geografia,
       fuso: { bancoMin: fuso.bancoMin, exibicaoMin: fuso.exibicaoMin },
       funil: {
         visitantes: Number(visitantesUnicos),
