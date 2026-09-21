@@ -4,6 +4,7 @@ import Relogio from "../components/Relogio";
 import Icone from "../components/Icones";
 import CartaoKpi, { Sparkline } from "../components/CartaoKpi";
 import { PontoLP, corDaLP } from "../components/coresLP";
+import { ResumoPainel } from "../components/Resumo";
 import estilos from "../styles/tv.module.css";
 
 var PERIODOS = [
@@ -58,6 +59,30 @@ function serie(s, chave) {
   });
 }
 
+// Números que o resumo usa (mesmo formato do painel principal).
+function kpisTV(s) {
+  var visitas = total(s, "visita");
+  var conversoes = total(s, "conversao");
+  var visitantes = s.engajamento.visitantesUnicos;
+  return {
+    visitantes: visitantes,
+    cliques: s.totaisPorTipo
+      .filter(function (t) { return t.tipo_evento.indexOf("clique_") === 0; })
+      .reduce(function (soma, t) { return soma + t.total; }, 0),
+    conversoes: conversoes,
+    cards: total(s, "card_criado"),
+    taxaCards: visitantes > 0 ? ((s.engajamento.visitantesComCard || 0) / visitantes) * 100 : 0,
+    taxaConversao: visitas > 0 ? (conversoes / visitas) * 100 : 0,
+  };
+}
+
+// Período de mesma duração colado logo antes do escolhido.
+function periodoAnterior(inicio, fim) {
+  var dias = listarDias(inicio, fim).length;
+  var novoFim = somarDiasStr(inicio, -1);
+  return { inicio: somarDiasStr(novoFim, -(dias - 1)), fim: novoFim };
+}
+
 function nomeClique(tipo) {
   var resto = tipo.replace("clique_", "").replace(/_/g, " ");
   return resto.charAt(0).toUpperCase() + resto.slice(1);
@@ -71,6 +96,7 @@ export default function ModoTV() {
   const [intervalo, setIntervalo] = useState(20);
   const [pausado, setPausado] = useState(false);
   const [cache, setCache] = useState({});
+  const [cacheAnt, setCacheAnt] = useState({});
   const [controlesVisiveis, setControlesVisiveis] = useState(true);
   const temporizador = useRef(null);
 
@@ -147,6 +173,41 @@ export default function ModoTV() {
     [chaveCache, carregar] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  // Período anterior (pra variação do resumo): uma busca por LP e período,
+  // sem repetir a cada 30s, porque o período anterior já terminou.
+  // Em "Hoje" o corte é "ontem até agora", então renova a cada minuto.
+  useEffect(
+    function () {
+      if (!slide) return;
+      var ehHoje = inicio === fim;
+      if (!ehHoje && cacheAnt[chaveCache] !== undefined) return;
+      var chave = chaveCache;
+      var p = periodoAnterior(inicio, fim);
+
+      function buscar() {
+        fetch("/api/stats?site=" + slide.slug + "&inicio=" + p.inicio + "&fim=" + p.fim + (ehHoje ? "&ateAgora=1" : ""))
+          .then(function (r) {
+            return r.ok ? r.json() : null;
+          })
+          .then(function (dados) {
+            setCacheAnt(function (c) {
+              var novo = Object.assign({}, c);
+              novo[chave] = dados && dados.totaisPorTipo ? dados : null;
+              return novo;
+            });
+          })
+          .catch(function () {});
+      }
+
+      buscar();
+      var id = ehHoje ? setInterval(buscar, 60000) : null;
+      return function () {
+        if (id) clearInterval(id);
+      };
+    },
+    [chaveCache] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   // Rotação automática
   useEffect(
     function () {
@@ -208,6 +269,7 @@ export default function ModoTV() {
   }, [slides.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   var dados = chaveCache ? cache[chaveCache] : null;
+  var dadosAnt = chaveCache ? cacheAnt[chaveCache] : null;
 
   var visitantes = dados ? dados.engajamento.visitantesUnicos : 0;
   var cliques = dados
@@ -221,6 +283,19 @@ export default function ModoTV() {
   var visitas = dados ? total(dados, "visita") : 0;
   var taxaConversao = visitas > 0 ? (conversoes / visitas) * 100 : 0;
   var taxaCards = dados && visitantes > 0 ? ((dados.engajamento.visitantesComCard || 0) / visitantes) * 100 : 0;
+
+  // Em períodos de um dia só (ex: "Hoje") o gráfico mostra visitas por hora.
+  var umDia = !!dados && dados.periodo.inicio === dados.periodo.fim;
+  var visitasPorHora = new Array(24).fill(0);
+  if (dados && umDia) {
+    (dados.mapaCalor || []).forEach(function (l) {
+      if (l.hora >= 0 && l.hora < 24) visitasPorHora[l.hora] += l.total;
+    });
+  }
+  var picoHora = 0;
+  visitasPorHora.forEach(function (v, h) {
+    if (v > visitasPorHora[picoHora]) picoHora = h;
+  });
 
   var topCliques = dados
     ? dados.cliquesPorTipo.slice(0, 5)
@@ -314,6 +389,18 @@ export default function ModoTV() {
             </div>
           </header>
 
+          {dados && (
+            <div className={estilos.resumoTv}>
+              <ResumoPainel
+                stats={dados}
+                k={kpisTV(dados)}
+                kAnt={dadosAnt ? kpisTV(dadosAnt) : null}
+                nomeLP={slide.nome}
+                todas={slide.slug === "todas"}
+              />
+            </div>
+          )}
+
           {!dados ? (
             <div className={estilos.grade}>
               {[0, 1, 2, 3].map(function (k) {
@@ -340,15 +427,23 @@ export default function ModoTV() {
 
               <div className={estilos.baixo}>
                 <section className={estilos.painel}>
-                  <h2>Visitantes por dia</h2>
+                  <h2>{umDia ? "Visitas por hora" : "Visitantes por dia"}</h2>
                   <div className={estilos.grafico}>
-                    <Sparkline valores={serie(dados, "visitantes")} />
+                    <Sparkline valores={umDia ? visitasPorHora : serie(dados, "visitantes")} />
                   </div>
-                  <div className={estilos.eixo}>
-                    <span>{dados.periodo.inicio.slice(8, 10) + "/" + dados.periodo.inicio.slice(5, 7)}</span>
-                    <span>{"pico de " + fmtN(Math.max.apply(null, serie(dados, "visitantes"))) + " por dia"}</span>
-                    <span>{dados.periodo.fim.slice(8, 10) + "/" + dados.periodo.fim.slice(5, 7)}</span>
-                  </div>
+                  {umDia ? (
+                    <div className={estilos.eixo}>
+                      <span>0h</span>
+                      <span>{visitasPorHora[picoHora] > 0 ? "pico às " + picoHora + "h (" + fmtN(visitasPorHora[picoHora]) + " visitas)" : "sem visitas ainda"}</span>
+                      <span>23h</span>
+                    </div>
+                  ) : (
+                    <div className={estilos.eixo}>
+                      <span>{dados.periodo.inicio.slice(8, 10) + "/" + dados.periodo.inicio.slice(5, 7)}</span>
+                      <span>{"pico de " + fmtN(Math.max.apply(null, serie(dados, "visitantes"))) + " por dia"}</span>
+                      <span>{dados.periodo.fim.slice(8, 10) + "/" + dados.periodo.fim.slice(5, 7)}</span>
+                    </div>
+                  )}
                 </section>
                 <section className={estilos.painel}>
                   <h2>Mais clicados</h2>

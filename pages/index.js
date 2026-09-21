@@ -144,22 +144,22 @@ function serieDe(s, chave) {
   });
 }
 
-function RodapeDelta({ atual, anterior, formatar, invertido }) {
+function RodapeDelta({ atual, anterior, formatar, invertido, rotulo }) {
   if (anterior == null) return null;
   return (
     <>
       <Delta v={variacao(atual, anterior)} invertido={invertido} />
-      <span className="card-base">antes: {formatar(anterior)}</span>
+      <span className="card-base">{rotulo || "antes"}: {formatar(anterior)}</span>
     </>
   );
 }
 
-function RodapePP({ atual, anterior, invertido }) {
+function RodapePP({ atual, anterior, invertido, rotulo }) {
   if (anterior == null) return null;
   return (
     <>
       <DeltaPP atual={atual} anterior={anterior} invertido={invertido} />
-      <span className="card-base">antes: {fmtPct1(anterior)}</span>
+      <span className="card-base">{rotulo || "antes"}: {fmtPct1(anterior)}</span>
     </>
   );
 }
@@ -286,16 +286,28 @@ export default function Dashboard() {
       var cancelado = false;
       setStatsAnterior(null);
       var p = periodoAnterior(dataInicio, dataFim);
-      fetch("/api/stats?site=" + siteSelecionado + "&inicio=" + p.inicio + "&fim=" + p.fim)
-        .then(function (r) {
-          return r.ok ? r.json() : null;
-        })
-        .then(function (dados) {
-          if (!cancelado && dados && dados.totaisPorTipo) setStatsAnterior(dados);
-        })
-        .catch(function () {});
+      // Hoje ainda não acabou: compara com ontem só até a mesma hora.
+      var ehHoje = dataInicio === dataFim && dataFim === new Date().toISOString().slice(0, 10);
+
+      function buscar() {
+        fetch(
+          "/api/stats?site=" + siteSelecionado + "&inicio=" + p.inicio + "&fim=" + p.fim + (ehHoje ? "&ateAgora=1" : "")
+        )
+          .then(function (r) {
+            return r.ok ? r.json() : null;
+          })
+          .then(function (dados) {
+            if (!cancelado && dados && dados.totaisPorTipo) setStatsAnterior(dados);
+          })
+          .catch(function () {});
+      }
+
+      buscar();
+      // O corte de "ontem até agora" anda com o relógio, então renova a cada minuto.
+      var id = ehHoje ? setInterval(buscar, 60000) : null;
       return function () {
         cancelado = true;
+        if (id) clearInterval(id);
       };
     },
     [siteSelecionado, dataInicio, dataFim]
@@ -318,6 +330,9 @@ export default function Dashboard() {
   const cliquesTotais = stats ? somarTodosCliques(stats.totaisPorTipo) : 0;
   const taxaConversao = visitas > 0 ? ((conversoes / visitas) * 100).toFixed(1) : "0.0";
   const k = kpisDe(stats);
+  // Em "Hoje" a comparação é com ontem só até a mesma hora.
+  const rotuloAntes =
+    dataInicio === dataFim && dataFim === new Date().toISOString().slice(0, 10) ? "ontem até agora" : "antes";
   const siteAtual =
     siteSelecionado && siteSelecionado !== "todas"
       ? sites.filter(function (s) {
@@ -474,21 +489,21 @@ export default function Dashboard() {
                   valor={fmtN(k.visitantes)}
                   acento={corPrincipal}
                   serie={serieDe(stats, "visitantes")}
-                  rodape={kAnt && <RodapeDelta atual={k.visitantes} anterior={kAnt.visitantes} formatar={fmtN} />}
+                  rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.visitantes} anterior={kAnt.visitantes} formatar={fmtN} />}
                 />
                 <CartaoKpi
                   rotulo="Cliques (todos os tipos)"
                   valor={fmtN(k.cliques)}
                   acento="#f59e0b"
                   serie={serieDe(stats, "cliques")}
-                  rodape={kAnt && <RodapeDelta atual={k.cliques} anterior={kAnt.cliques} formatar={fmtN} />}
+                  rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.cliques} anterior={kAnt.cliques} formatar={fmtN} />}
                 />
                 <CartaoKpi
                   rotulo="Conversões"
                   valor={fmtN(k.conversoes)}
                   acento="#22c55e"
                   serie={serieDe(stats, "conversoes")}
-                  rodape={kAnt && <RodapeDelta atual={k.conversoes} anterior={kAnt.conversoes} formatar={fmtN} />}
+                  rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.conversoes} anterior={kAnt.conversoes} formatar={fmtN} />}
                 />
                 {k.quizzes > 0 && (
                   <CartaoKpi
@@ -496,7 +511,7 @@ export default function Dashboard() {
                     valor={fmtN(k.quizzes)}
                     acento="#38bdf8"
                     serie={serieDe(stats, "quizzes")}
-                    rodape={kAnt && <RodapeDelta atual={k.quizzes} anterior={kAnt.quizzes} formatar={fmtN} />}
+                    rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.quizzes} anterior={kAnt.quizzes} formatar={fmtN} />}
                   />
                 )}
                 {k.leads > 0 && (
@@ -505,7 +520,7 @@ export default function Dashboard() {
                     valor={fmtN(k.leads)}
                     acento="#fb923c"
                     serie={serieDe(stats, "leads")}
-                    rodape={kAnt && <RodapeDelta atual={k.leads} anterior={kAnt.leads} formatar={fmtN} />}
+                    rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.leads} anterior={kAnt.leads} formatar={fmtN} />}
                   />
                 )}
                 {k.cards > 0 && (
@@ -514,7 +529,7 @@ export default function Dashboard() {
                     valor={fmtN(k.cards)}
                     acento="#14b8a6"
                     serie={serieDe(stats, "cards")}
-                    rodape={kAnt && <RodapeDelta atual={k.cards} anterior={kAnt.cards} formatar={fmtN} />}
+                    rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.cards} anterior={kAnt.cards} formatar={fmtN} />}
                   />
                 )}
                 {k.cards > 0 && (
@@ -523,26 +538,26 @@ export default function Dashboard() {
                     valor={fmtPct1(k.taxaCards)}
                     acento="#14b8a6"
                     secundario="dos visitantes únicos"
-                    rodape={kAnt && <RodapePP atual={k.taxaCards} anterior={kAnt.taxaCards} />}
+                    rodape={kAnt && <RodapePP rotulo={rotuloAntes} atual={k.taxaCards} anterior={kAnt.taxaCards} />}
                   />
                 )}
                 <CartaoKpi
                   rotulo="Taxa de conversão"
                   valor={fmtPct1(k.taxaConversao)}
                   acento="#22c55e"
-                  rodape={kAnt && <RodapePP atual={k.taxaConversao} anterior={kAnt.taxaConversao} />}
+                  rodape={kAnt && <RodapePP rotulo={rotuloAntes} atual={k.taxaConversao} anterior={kAnt.taxaConversao} />}
                 />
                 <CartaoKpi
                   rotulo="Taxa de rejeição"
                   valor={fmtPct1(k.taxaRejeicao)}
                   acento="#f43f5e"
-                  rodape={kAnt && <RodapePP atual={k.taxaRejeicao} anterior={kAnt.taxaRejeicao} invertido />}
+                  rodape={kAnt && <RodapePP rotulo={rotuloAntes} atual={k.taxaRejeicao} anterior={kAnt.taxaRejeicao} invertido />}
                 />
                 <CartaoKpi
                   rotulo="Tempo médio na página"
                   valor={fmtTempo(k.tempo)}
                   acento="#a78bfa"
-                  rodape={kAnt && <RodapeDelta atual={k.tempo} anterior={kAnt.tempo} formatar={fmtTempo} />}
+                  rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.tempo} anterior={kAnt.tempo} formatar={fmtTempo} />}
                 />
               </div>
 

@@ -279,9 +279,11 @@ Na tag "Solicitação HTTP" vinculada ao trigger "Todos os Eventos - GA4":
   em chips, tabelas, no seletor do painel e no modo TV. Para salvar a cor,
   rode uma vez `db/migration-4.sql` no banco. Sem isso nada quebra: cada LP
   usa uma cor automática e o cadastro avisa que a cor não foi salva.
-- **Resumo em uma frase**: no topo do painel e dos relatórios, um texto com
+- **Resumo em uma frase** (painel, relatórios e modo TV): no topo, um texto com
   visitantes, variação contra o período anterior, melhor origem, horário de
-  pico e resultado (cards, conversões ou cliques).
+  pico e resultado (cards, conversões ou cliques). No filtro "Hoje" ele compara
+  com ontem só até a mesma hora (`?ateAgora=1` em `/api/stats`), pra não
+  parecer queda só porque o dia ainda não acabou.
 - **`/tv` (modo TV)**: painel de números grandes que alterna sozinho entre
   "todas as LPs" e cada LP. Período (hoje, 7 ou 30 dias) e tempo em cada
   LP (10, 20 ou 30s) ficam salvos no navegador. Os controles aparecem ao

@@ -21,16 +21,17 @@ function ddmm(str) {
   return str.slice(8, 10) + "/" + str.slice(5, 7);
 }
 
-function diasEntre(inicio, fim) {
-  return Math.round((new Date(fim + "T00:00:00Z") - new Date(inicio + "T00:00:00Z")) / 86400000) + 1;
-}
-
-// "Hoje", "Nos últimos 30 dias" ou "Entre 01/09 e 15/09"
+// "Hoje", "Em 15/09" ou "Entre 01/09 e 15/09" (sempre as datas reais do filtro)
 function frasePeriodo(inicio, fim) {
   var hoje = new Date().toISOString().slice(0, 10);
   if (inicio === fim) return fim === hoje ? "Hoje" : "Em " + ddmm(fim);
-  if (fim === hoje) return "Nos últimos " + diasEntre(inicio, fim) + " dias";
   return "Entre " + ddmm(inicio) + " e " + ddmm(fim);
+}
+
+// Período de um dia só, que é hoje: ainda não terminou. A comparação é com
+// ontem só até a mesma hora (a busca do período anterior usa ?ateAgora=1).
+function hojeParcial(inicio, fim) {
+  return inicio === fim && fim === new Date().toISOString().slice(0, 10);
 }
 
 function F({ children }) {
@@ -38,15 +39,16 @@ function F({ children }) {
 }
 
 // "(12% a mais que no período anterior)" — null se não dá pra comparar.
-function fraseVariacao(atual, anterior, curta) {
+function fraseVariacao(atual, anterior, curta, parcial) {
+  var base = parcial ? "ontem até este horário" : "o período anterior";
   if (anterior == null || atual == null) return null;
-  if (anterior === 0) return atual > 0 ? "sem período anterior para comparar" : null;
+  if (anterior === 0) return atual > 0 ? (parcial ? "ontem ainda não tinha visitas até este horário" : "sem período anterior para comparar") : null;
   var pct = ((atual - anterior) / anterior) * 100;
-  if (Math.abs(pct) < 1) return <>{curta ? "estável" : "estável em relação ao período anterior"}</>;
+  if (Math.abs(pct) < 1) return <>{curta ? "estável" : "estável em relação a " + base}</>;
   return (
     <>
       <F>{fmtPct1(Math.abs(pct))} {pct > 0 ? "a mais" : "a menos"}</F>
-      {curta ? "" : " que no período anterior"}
+      {curta ? "" : parcial ? " que ontem até este horário" : " que no período anterior"}
     </>
   );
 }
@@ -106,7 +108,8 @@ export function ResumoPainel({ stats, k, kAnt, nomeLP, todas }) {
     );
   }
 
-  var variacao = kAnt ? fraseVariacao(k.visitantes, kAnt.visitantes) : null;
+  var parcial = hojeParcial(stats.periodo.inicio, stats.periodo.fim);
+  var variacao = kAnt ? fraseVariacao(k.visitantes, kAnt.visitantes, false, parcial) : null;
   var origem = maiorOrigem(stats);
   var pico = horaDePico(stats);
 
@@ -184,7 +187,9 @@ export function ResumoRelatorio({ dados, atual, anterior, escopo, plural }) {
   if (!dados || !atual) return null;
 
   var periodo = frasePeriodo(dados.periodo.inicio, dados.periodo.fim);
-  var variacao = anterior ? fraseVariacao(atual.visitantes, anterior.visitantes) : null;
+  // Quem decide se a comparação é "até a mesma hora" é o servidor (relógio do banco).
+  var parcial = !!dados.comparacaoParcial;
+  var variacao = anterior ? fraseVariacao(atual.visitantes, anterior.visitantes, false, parcial) : null;
 
   var celular = atual.disp ? atual.disp.mobile : null;
   var tempoVar = anterior && atual.tempoMedio != null && anterior.tempoMedio ? fraseVariacao(atual.tempoMedio, anterior.tempoMedio, true) : null;

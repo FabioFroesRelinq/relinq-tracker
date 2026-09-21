@@ -5,7 +5,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ erro: "Método não permitido" });
   }
 
-  const { site, inicio, fim } = req.query;
+  const { site, inicio, fim, ateAgora } = req.query;
 
   if (!site) {
     return res.status(400).json({ erro: "Parâmetro 'site' é obrigatório" });
@@ -51,7 +51,15 @@ export default async function handler(req, res) {
     const condSite = todasLPs ? "" : "site_id = ? AND ";
 
     const paramsSite = todasLPs ? [] : [siteId];
-    const filtroData = [...paramsSite, `${dataInicio} 00:00:00`, `${dataFim} 23:59:59`];
+    // Com ?ateAgora=1 o último dia vai só até a hora atual do banco. É o que
+    // permite comparar "hoje até agora" com "ontem até a mesma hora".
+    let horaFim = "23:59:59";
+    if (ateAgora === "1") {
+      const [[{ agora }]] = await pool.query("SELECT TIME_FORMAT(NOW(), '%H:%i:%s') AS agora");
+      horaFim = agora;
+    }
+
+    const filtroData = [...paramsSite, `${dataInicio} 00:00:00`, `${dataFim} ${horaFim}`];
 
     // Totais por tipo de evento (visita, clique_whatsapp, conversao, etc.)
     const [totaisPorTipo] = await pool.query(

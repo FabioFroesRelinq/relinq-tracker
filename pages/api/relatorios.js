@@ -119,8 +119,8 @@ function normalizarDia(r) {
   };
 }
 
-async function consultarPeriodo(pool, siteIds, inicio, fim) {
-  const janela = [siteIds, `${inicio} 00:00:00`, `${fim} 23:59:59`];
+async function consultarPeriodo(pool, siteIds, inicio, fim, horaFim) {
+  const janela = [siteIds, `${inicio} 00:00:00`, `${fim} ${horaFim || "23:59:59"}`];
 
   const [resTotal, resSites, resDias] = await Promise.all([
     pool.query(
@@ -220,9 +220,19 @@ export default async function handler(req, res) {
       anteriorInicio = somarDias(anteriorFim, -(dias - 1));
     }
 
+    // Se o período é só o dia de hoje (no relógio do banco), ele ainda não
+    // acabou: compara com ontem só até a mesma hora, pra não parecer queda.
+    let horaCorte = null;
+    if (compararAtivo && inicio === fim) {
+      const [[relogio]] = await pool.query(
+        "SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS hoje, TIME_FORMAT(NOW(), '%H:%i:%s') AS agora"
+      );
+      if (relogio && relogio.hoje === inicio) horaCorte = relogio.agora;
+    }
+
     const [atual, anterior] = await Promise.all([
       consultarPeriodo(pool, siteIds, inicio, fim),
-      compararAtivo ? consultarPeriodo(pool, siteIds, anteriorInicio, anteriorFim) : null,
+      compararAtivo ? consultarPeriodo(pool, siteIds, anteriorInicio, anteriorFim, horaCorte) : null,
     ]);
 
     // Série diária alinhada por posição: dia 1 do atual x dia 1 do anterior, etc.
@@ -250,6 +260,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       periodo: { inicio, fim, dias },
       anterior: compararAtivo ? { inicio: anteriorInicio, fim: anteriorFim } : null,
+      comparacaoParcial: horaCorte !== null,
       tempoMaximoSegundos: TEMPO_MAXIMO_SEGUNDOS,
       total: {
         atual: normalizarMetricas(atual.total),
