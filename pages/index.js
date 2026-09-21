@@ -11,6 +11,7 @@ import Esqueleto from "../components/Esqueleto";
 import { Delta, DeltaPP, variacao } from "../components/Delta";
 import { PontoLP, corDaLP } from "../components/coresLP";
 import { ResumoPainel } from "../components/Resumo";
+import nomeFuso from "../components/nomeFuso";
 
 function ehClique(tipoEvento) {
   return tipoEvento.indexOf("clique_") === 0;
@@ -584,7 +585,7 @@ export default function Dashboard() {
                 aberta={!secoesFechadas.horarios}
                 aoAlternar={alternarSecao}
               >
-                <MapaCalor dados={stats.mapaCalor} />
+                <MapaCalor dados={stats.mapaCalor} fuso={stats.fuso} />
               </Secao>
 
               <Secao
@@ -1671,7 +1672,7 @@ function Funil({ funil }) {
 // --- Mapa de calor: visitas por dia da semana x hora do dia ---
 var DIAS_SEMANA = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"];
 
-function MapaCalor({ dados }) {
+function MapaCalor({ dados, fuso }) {
   if (!dados || dados.length === 0) {
     return <p className="vazio">Sem visitas nesse período.</p>;
   }
@@ -1729,6 +1730,9 @@ function MapaCalor({ dados }) {
         <span className="mapa-calor-escala" />
         <span>mais visitas (pico: {fmtN(maximo)} numa hora)</span>
       </div>
+      <p className="valor-secundario" style={{ marginTop: 8 }}>
+        Horas no {nomeFuso(fuso ? fuso.exibicaoMin : null)}.
+      </p>
     </div>
   );
 }

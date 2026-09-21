@@ -1,4 +1,5 @@
 import { getPool } from "../../lib/db";
+import { infoFuso } from "../../lib/fuso";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -225,13 +226,13 @@ export default async function handler(req, res) {
     });
 
     // --- Mapa de calor: visitas por dia da semana x hora ---
-    // criado_em está no fuso do servidor do banco. Se ele não for o horário
-    // de Brasília, defina TZ_OFFSET_HORAS (ex: -3 se o banco estiver em UTC).
-    const offsetBruto = parseInt(process.env.TZ_OFFSET_HORAS || "0", 10);
-    const offsetHoras = Number.isInteger(offsetBruto) ? Math.max(-23, Math.min(23, offsetBruto)) : 0;
+    // criado_em está no relógio do servidor do banco (geralmente UTC). O
+    // deslocamento até o horário de Brasília é descoberto sozinho (lib/fuso.js).
+    const fuso = await infoFuso(pool);
+    const deslocamento = Math.trunc(fuso.deslocamentoMin);
     const [mapaCalorBruto] = await pool.query(
-      `SELECT DAYOFWEEK(DATE_ADD(criado_em, INTERVAL ${offsetHoras} HOUR)) AS dow,
-              HOUR(DATE_ADD(criado_em, INTERVAL ${offsetHoras} HOUR)) AS hora,
+      `SELECT DAYOFWEEK(DATE_ADD(criado_em, INTERVAL ${deslocamento} MINUTE)) AS dow,
+              HOUR(DATE_ADD(criado_em, INTERVAL ${deslocamento} MINUTE)) AS hora,
               COUNT(*) AS total
        FROM events
        WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento = 'visita'
@@ -337,6 +338,7 @@ export default async function handler(req, res) {
       cliquesPorRotulo,
       serieKpi,
       mapaCalor,
+      fuso: { bancoMin: fuso.bancoMin, exibicaoMin: fuso.exibicaoMin },
       funil: {
         visitantes: Number(visitantesUnicos),
         comClique: Number(visitantesComClique),

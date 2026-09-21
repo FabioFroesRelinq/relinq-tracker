@@ -307,8 +307,11 @@ Na tag "Solicitação HTTP" vinculada ao trigger "Todos os Eventos - GA4":
 - **Painel principal**: cada card mostra a tendência dos dias do período e a
   variação contra o período anterior (mesma duração, logo antes). Também tem
   o funil de visitantes (visita, clique, card, conversão) e o mapa de calor
-  de visitas por dia da semana e hora. O mapa usa o fuso do banco: se ele
-  estiver em UTC, defina `TZ_OFFSET_HORAS=-3` nas variáveis de ambiente.
+  de visitas por dia da semana e hora. As horas aparecem no horário de
+  Brasília: o painel descobre sozinho o fuso do relógio do banco (`lib/fuso.js`)
+  e converte, sem configuração. Para outro fuso, defina `FUSO_EXIBICAO_HORAS`
+  (ex: `-4`). A tela Jornada usa a mesma conversão. Os dias (filtros e gráficos
+  por dia) ainda viram à meia-noite do relógio do banco.
 - **Cards criados (formulário da LP de evento)**: o próprio `tracker.js`
   observa a caixa de sucesso do formulário (`#reg-success`) e dispara
   `card_criado` quando ela aparece, ou seja, depois que o card foi criado

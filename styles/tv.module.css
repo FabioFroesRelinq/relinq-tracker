@@ -77,6 +77,10 @@
   border-radius: 20px;
 }
 
+.grade :global(.card-sem-spark) {
+  padding-bottom: 2vh;
+}
+
 .grade :global(.card .label) {
   font-size: clamp(1rem, 1.5vw, 1.6rem);
 }

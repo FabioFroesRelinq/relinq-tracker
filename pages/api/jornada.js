@@ -1,4 +1,5 @@
 import { getPool } from "../../lib/db";
+import { infoFuso } from "../../lib/fuso";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -9,11 +10,13 @@ export default async function handler(req, res) {
 
   try {
     const pool = getPool();
+    const desl = Math.trunc((await infoFuso(pool)).deslocamentoMin);
 
     // Busca o histórico completo de um visitante específico, em qualquer LP
     if (visitor_id) {
       const [eventos] = await pool.query(
-        `SELECT e.tipo_evento, e.rotulo, e.pagina, e.video_id, e.valor, e.criado_em,
+        `SELECT e.tipo_evento, e.rotulo, e.pagina, e.video_id, e.valor,
+                DATE_FORMAT(DATE_ADD(e.criado_em, INTERVAL ${desl} MINUTE), '%Y-%m-%d %H:%i:%s') AS criado_em,
                 s.nome AS site_nome, s.slug AS site_slug
          FROM events e
          JOIN sites s ON s.id = e.site_id
@@ -28,7 +31,8 @@ export default async function handler(req, res) {
     // capturado como relinq_rotulo em algum evento de conversão/lead)
     if (busca) {
       const [candidatos] = await pool.query(
-        `SELECT visitor_id, rotulo, tipo_evento, criado_em
+        `SELECT visitor_id, rotulo, tipo_evento,
+                DATE_FORMAT(DATE_ADD(criado_em, INTERVAL ${desl} MINUTE), '%Y-%m-%d %H:%i:%s') AS criado_em
          FROM events
          WHERE rotulo LIKE ? AND visitor_id IS NOT NULL
          ORDER BY criado_em DESC

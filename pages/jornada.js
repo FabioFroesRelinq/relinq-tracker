@@ -10,9 +10,12 @@ function nomeAmigavelEvento(tipoEvento) {
   return tipoEvento.replace(/_/g, " ");
 }
 
-function formatarData(iso) {
-  var d = new Date(iso);
-  return d.toLocaleString("pt-BR");
+// A API já manda o horário pronto ("2026-09-21 13:45:00", em horário de Brasília).
+// Lemos o texto direto: passar por new Date() aplicaria o fuso do navegador de novo.
+function formatarData(texto) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2}:\d{2})/.exec(String(texto));
+  if (m) return m[3] + "/" + m[2] + "/" + m[1] + ", " + m[4];
+  return new Date(texto).toLocaleString("pt-BR");
 }
 
 export default function Jornada() {

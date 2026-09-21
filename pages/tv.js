@@ -6,6 +6,7 @@ import CartaoKpi, { Sparkline } from "../components/CartaoKpi";
 import { PontoLP, corDaLP } from "../components/coresLP";
 import { ResumoPainel } from "../components/Resumo";
 import AvisosCards from "../components/AvisosCards";
+import nomeFuso from "../components/nomeFuso";
 import useAvisoCards, { tocarSom } from "../components/useAvisoCards";
 import estilos from "../styles/tv.module.css";
 
@@ -564,7 +565,7 @@ export default function ModoTV() {
 
               <div className={estilos.baixo}>
                 <section className={estilos.painel}>
-                  <h2>{umDia ? "Visitas por hora" : "Visitantes por dia"}</h2>
+                  <h2>{umDia ? "Visitas por hora (" + nomeFuso(dados.fuso ? dados.fuso.exibicaoMin : null) + ")" : "Visitantes por dia"}</h2>
                   <div className={estilos.grafico}>
                     <Sparkline valores={umDia ? visitasPorHora : serie(dados, "visitantes")} />
                   </div>
