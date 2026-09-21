@@ -1,16 +1,7 @@
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/router";
+import Shell from "../components/Shell";
 
 export default function CadastroSites() {
-  const router = useRouter();
-
-  function sair() {
-    fetch("/api/logout", { method: "POST" }).finally(function () {
-      router.push("/login");
-    });
-  }
-
   const [sites, setSites] = useState([]);
   const [nome, setNome] = useState("");
   const [dominio, setDominio] = useState("");
@@ -84,21 +75,7 @@ export default function CadastroSites() {
   }
 
   return (
-    <div className="container">
-      <div className="header">
-        <div className="header-titulo">
-          <img
-            src="https://lightblue-monkey-580531.hostingersite.com/wp-content/uploads/2026/09/logo-removebg-preview.png"
-            alt="Relinq"
-            className="logo-relinq"
-          />
-          <h1>Cadastrar LP</h1>
-        </div>
-        <div className="nav">
-          <Link href="/">← Voltar ao painel</Link>
-          <button className="btn-sair" onClick={sair}>Sair</button>
-        </div>
-      </div>
+    <Shell titulo="Cadastrar LP" subtitulo="Cada LP recebe um slug para usar no script do tracker">
 
       <form className="form-cadastro" onSubmit={cadastrar}>
         <label>Nome da LP</label>
@@ -213,6 +190,6 @@ export default function CadastroSites() {
           </form>
         </div>
       )}
-    </div>
+    </Shell>
   );
 }

@@ -42,5 +42,6 @@ export const config = {
     "/relatorios",
     "/api/relatorios",
     "/api/relatorios/:path*",
+    "/tv",
   ],
 };

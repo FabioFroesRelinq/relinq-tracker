@@ -1,7 +1,5 @@
 import { useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/router";
-import Relogio from "../components/Relogio";
+import Shell from "../components/Shell";
 
 function nomeAmigavelEvento(tipoEvento) {
   var mapa = {
@@ -18,14 +16,6 @@ function formatarData(iso) {
 }
 
 export default function Jornada() {
-  const router = useRouter();
-
-  function sair() {
-    fetch("/api/logout", { method: "POST" }).finally(function () {
-      router.push("/login");
-    });
-  }
-
   const [busca, setBusca] = useState("");
   const [candidatos, setCandidatos] = useState(null);
   const [visitorAtual, setVisitorAtual] = useState(null);
@@ -80,26 +70,10 @@ export default function Jornada() {
   }
 
   return (
-    <div className="container">
-      <div className="header">
-        <div className="header-titulo">
-          <img
-            src="https://lightblue-monkey-580531.hostingersite.com/wp-content/uploads/2026/09/logo-removebg-preview.png"
-            alt="Relinq"
-            className="logo-relinq"
-          />
-          <h1>Jornada do visitante</h1>
-        </div>
-        <div className="nav">
-          <Link href="/">← Painel por LP</Link>
-          <Link href="/visao-geral">Visão geral</Link>
-          <Link href="/relatorios">Relatórios</Link>
-          <button className="btn-sair" onClick={sair}>Sair</button>
-        </div>
-      </div>
-      <p className="atualizacao-automatica">
-        Veja o caminho completo de uma pessoa entre as LPs <Relogio />
-      </p>
+    <Shell
+      titulo="Jornada do visitante"
+      subtitulo="Veja o caminho completo de uma pessoa entre as LPs"
+    >
 
       {!visitorAtual && (
         <div className="secao">
@@ -156,7 +130,7 @@ export default function Jornada() {
                             abrirVisitante(c.visitor_id);
                           }}
                         >
-                          Ver jornada →
+                          Ver jornada
                         </button>
                       </td>
                     </tr>
@@ -173,7 +147,7 @@ export default function Jornada() {
           <div className="secao-cabecalho">
             <h2>Linha do tempo</h2>
             <button className="link-acao" onClick={voltarBusca}>
-              ← Nova busca
+              Nova busca
             </button>
           </div>
 
@@ -213,6 +187,6 @@ export default function Jornada() {
           )}
         </div>
       )}
-    </div>
+    </Shell>
   );
 }

@@ -1,0 +1,285 @@
+/* Modo TV: números grandes, uma LP por vez. */
+
+.tv {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 2.2vh;
+  padding: 3.5vh 3.5vw 5vh;
+  position: relative;
+}
+
+.topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.titulo {
+  margin: 0;
+  font-size: clamp(2rem, 4.2vw, 4.2rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--texto-forte);
+  line-height: 1.05;
+}
+
+.periodo {
+  margin: 0.8vh 0 0;
+  font-size: clamp(1rem, 1.6vw, 1.7rem);
+  font-weight: 600;
+  color: var(--texto-suave);
+}
+
+.hora {
+  font-size: clamp(1rem, 1.7vw, 1.9rem);
+  font-weight: 700;
+  color: var(--texto-medio);
+}
+
+.grade {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.6vw;
+}
+
+/* Reaproveita o CartaoKpi, só que em escala de TV */
+.grade :global(.card) {
+  min-height: 24vh;
+  padding: 2.4vh 1.6vw 0;
+  border-radius: 20px;
+}
+
+.grade :global(.card .label) {
+  font-size: clamp(1rem, 1.5vw, 1.6rem);
+}
+
+.grade :global(.card .valor) {
+  font-size: clamp(2.4rem, 5.2vw, 6.2rem);
+  margin-top: 1.4vh;
+}
+
+.grade :global(.card .valor-secundario) {
+  font-size: clamp(0.9rem, 1.2vw, 1.3rem);
+}
+
+.grade :global(.card-spark) {
+  height: 7vh;
+}
+
+.baixo {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr;
+  gap: 1.6vw;
+  min-height: 0;
+}
+
+.painel {
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: 20px;
+  padding: 2.4vh 1.6vw;
+  display: flex;
+  flex-direction: column;
+  gap: 1.6vh;
+  min-height: 24vh;
+}
+
+.painel h2 {
+  margin: 0;
+  font-size: clamp(1rem, 1.5vw, 1.6rem);
+  font-weight: 700;
+  color: var(--texto-suave);
+}
+
+.grafico {
+  flex: 1;
+  min-height: 12vh;
+  display: flex;
+}
+
+.grafico :global(.card-spark) {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 12vh;
+  color: var(--primaria);
+}
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6vh;
+  font-size: clamp(0.95rem, 1.4vw, 1.5rem);
+  color: var(--texto-medio);
+}
+
+.linha {
+  display: grid;
+  grid-template-columns: 9.5em minmax(0, 1fr) 4.6em;
+  align-items: center;
+  gap: 1vw;
+}
+
+.linha > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linha strong {
+  color: var(--texto-forte);
+  text-align: right;
+}
+
+.eixo {
+  display: flex;
+  justify-content: space-between;
+  font-size: clamp(0.8rem, 1.1vw, 1.2rem);
+  color: var(--texto-mudo);
+}
+
+.barra {
+  height: 1.3vh;
+  min-height: 8px;
+  border-radius: 999px;
+  background: var(--superficie-3);
+  overflow: hidden;
+}
+
+.barra > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primaria);
+}
+
+.mudo {
+  margin: 0;
+  color: var(--texto-mudo);
+  font-size: clamp(0.95rem, 1.3vw, 1.4rem);
+}
+
+.vazio {
+  margin: auto;
+  text-align: center;
+  color: var(--texto-forte);
+}
+
+/* Barra de progresso até a próxima LP */
+.progresso {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 5px;
+  background: var(--borda);
+}
+
+.progressoBarra {
+  height: 100%;
+  width: 0;
+  background: var(--primaria);
+  animation-name: encher;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes encher {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+/* Controles: aparecem ao mexer o mouse e somem depois */
+.controles {
+  position: fixed;
+  bottom: 22px;
+  right: 18px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--superficie) 92%, transparent);
+  border: 1px solid var(--borda-forte);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.controlesVisiveis,
+.controles:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.grupo {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--superficie-3);
+}
+
+.opcao,
+.botao,
+.sair {
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 11px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.opcaoAtiva {
+  background: var(--primaria);
+  color: #fff;
+}
+
+.botao:hover,
+.opcao:hover:not(.opcaoAtiva),
+.sair:hover {
+  color: var(--texto-forte);
+}
+
+.sair {
+  border: 1px solid var(--borda-forte);
+}
+
+.giraEsq {
+  transform: rotate(90deg);
+}
+
+.giraDir {
+  transform: rotate(-90deg);
+}
+
+@media (max-width: 900px) {
+  .grade {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .baixo {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressoBarra {
+    animation: none;
+    width: 100%;
+  }
+}

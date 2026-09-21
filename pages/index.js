@@ -2,6 +2,13 @@ import { useEffect, useState, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import Relogio from "../components/Relogio";
+import Shell from "../components/Shell";
+import Secao from "../components/Secao";
+import Icone from "../components/Icones";
+import CartaoKpi from "../components/CartaoKpi";
+import EstadoVazio from "../components/EstadoVazio";
+import Esqueleto from "../components/Esqueleto";
+import { Delta, DeltaPP, variacao } from "../components/Delta";
 
 function ehClique(tipoEvento) {
   return tipoEvento.indexOf("clique_") === 0;
@@ -61,14 +68,102 @@ function nomeAmigavelDispositivo(d) {
   return "Desconhecido";
 }
 
+var nfInt = new Intl.NumberFormat("pt-BR");
+
+function fmtN(n) {
+  return n == null ? "—" : nfInt.format(n);
+}
+
+function fmtPct1(n) {
+  return n == null ? "—" : n.toFixed(1).replace(".", ",") + "%";
+}
+
+function fmtTempo(segundos) {
+  if (segundos == null) return "—";
+  var s = Math.round(segundos);
+  if (s < 60) return s + "s";
+  return Math.floor(s / 60) + "m " + String(s % 60).padStart(2, "0") + "s";
+}
+
+// --- Datas AAAA-MM-DD (em UTC, sem fuso) ---
+function somarDiasStr(str, n) {
+  var d = new Date(str + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function diasEntreStr(inicio, fim) {
+  return Math.round((new Date(fim + "T00:00:00Z") - new Date(inicio + "T00:00:00Z")) / 86400000) + 1;
+}
+
+// Período de mesma duração colado logo antes do escolhido.
+function periodoAnterior(inicio, fim) {
+  var dias = diasEntreStr(inicio, fim);
+  var novoFim = somarDiasStr(inicio, -1);
+  return { inicio: somarDiasStr(novoFim, -(dias - 1)), fim: novoFim };
+}
+
+function listarDias(inicio, fim) {
+  var total = Math.min(400, Math.max(1, diasEntreStr(inicio, fim)));
+  var lista = [];
+  for (var i = 0; i < total; i++) lista.push(somarDiasStr(inicio, i));
+  return lista;
+}
+
+// Números-chave de um resultado de /api/stats (usados nos cards e nas variações).
+function kpisDe(s) {
+  if (!s || !s.totaisPorTipo || !s.engajamento) return null;
+  var visitas = somarPorTipo(s.totaisPorTipo, "visita");
+  var conversoes = somarPorTipo(s.totaisPorTipo, "conversao");
+  var visitantes = s.engajamento.visitantesUnicos;
+  return {
+    visitantes: visitantes,
+    cliques: somarTodosCliques(s.totaisPorTipo),
+    conversoes: conversoes,
+    quizzes: somarPorTipo(s.totaisPorTipo, "quiz_finalizado"),
+    leads: somarPorTipo(s.totaisPorTipo, "lead_capturado"),
+    cards: somarPorTipo(s.totaisPorTipo, "card_criado"),
+    taxaCards: visitantes > 0 ? ((s.engajamento.visitantesComCard || 0) / visitantes) * 100 : 0,
+    taxaConversao: visitas > 0 ? (conversoes / visitas) * 100 : 0,
+    taxaRejeicao: s.engajamento.taxaRejeicao,
+    tempo: s.engajamento.tempoMedioSegundos,
+  };
+}
+
+// Série diária (uma posição por dia do período) pros mini gráficos dos cards.
+function serieDe(s, chave) {
+  if (!s || !s.serieKpi || !s.periodo) return null;
+  var mapa = {};
+  s.serieKpi.forEach(function (l) {
+    mapa[l.dia] = l[chave];
+  });
+  return listarDias(s.periodo.inicio, s.periodo.fim).map(function (d) {
+    return mapa[d] || 0;
+  });
+}
+
+function RodapeDelta({ atual, anterior, formatar, invertido }) {
+  if (anterior == null) return null;
+  return (
+    <>
+      <Delta v={variacao(atual, anterior)} invertido={invertido} />
+      <span className="card-base">antes: {formatar(anterior)}</span>
+    </>
+  );
+}
+
+function RodapePP({ atual, anterior, invertido }) {
+  if (anterior == null) return null;
+  return (
+    <>
+      <DeltaPP atual={atual} anterior={anterior} invertido={invertido} />
+      <span className="card-base">antes: {fmtPct1(anterior)}</span>
+    </>
+  );
+}
+
 export default function Dashboard() {
   const router = useRouter();
-
-  function sair() {
-    fetch("/api/logout", { method: "POST" }).finally(function () {
-      router.push("/login");
-    });
-  }
 
   const [sites, setSites] = useState([]);
   const [siteSelecionado, setSiteSelecionado] = useState("");
@@ -89,26 +184,7 @@ export default function Dashboard() {
       return novo;
     });
   }
-  const [modoTV, setModoTV] = useState(false);
-
-  // Lê a preferência salva no navegador ao carregar (só no cliente, pra
-  // não dar erro de hidratação comparando servidor x navegador)
-  useEffect(function () {
-    try {
-      var salvo = localStorage.getItem("relinq_modo_tv");
-      if (salvo === "1") setModoTV(true);
-    } catch (e) {}
-  }, []);
-
-  useEffect(
-    function () {
-      document.body.classList.toggle("modo-tv", modoTV);
-      try {
-        localStorage.setItem("relinq_modo_tv", modoTV ? "1" : "0");
-      } catch (e) {}
-    },
-    [modoTV]
-  );
+  const [statsAnterior, setStatsAnterior] = useState(null);
   const [buscaCliques, setBuscaCliques] = useState("");
   const [dataInicio, setDataInicio] = useState(
     new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
@@ -200,6 +276,29 @@ export default function Dashboard() {
     [siteSelecionado, filtroCliquesLP, dataInicio, dataFim]
   );
 
+  // Período anterior (pras variações dos cards): buscado uma vez a cada
+  // mudança de filtro, sem entrar no refresh automático de 10s.
+  useEffect(
+    function () {
+      if (!siteSelecionado || dataInicio > dataFim) return;
+      var cancelado = false;
+      setStatsAnterior(null);
+      var p = periodoAnterior(dataInicio, dataFim);
+      fetch("/api/stats?site=" + siteSelecionado + "&inicio=" + p.inicio + "&fim=" + p.fim)
+        .then(function (r) {
+          return r.ok ? r.json() : null;
+        })
+        .then(function (dados) {
+          if (!cancelado && dados && dados.totaisPorTipo) setStatsAnterior(dados);
+        })
+        .catch(function () {});
+      return function () {
+        cancelado = true;
+      };
+    },
+    [siteSelecionado, dataInicio, dataFim]
+  );
+
   const visitas = stats ? somarPorTipo(stats.totaisPorTipo, "visita") : 0;
   const conversoes = stats ? somarPorTipo(stats.totaisPorTipo, "conversao") : 0;
   const quizzesFinalizados = stats ? somarPorTipo(stats.totaisPorTipo, "quiz_finalizado") : 0;
@@ -216,6 +315,8 @@ export default function Dashboard() {
     : [];
   const cliquesTotais = stats ? somarTodosCliques(stats.totaisPorTipo) : 0;
   const taxaConversao = visitas > 0 ? ((conversoes / visitas) * 100).toFixed(1) : "0.0";
+  const k = kpisDe(stats);
+  const kAnt = kpisDe(statsAnterior);
 
   const origemAgrupada = stats ? agruparPorChave(stats.porOrigem, "utm_source") : {};
   const campanhaAgrupada = stats ? agruparPorChave(stats.porCampanha, "utm_campaign") : {};
@@ -275,42 +376,27 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="container">
-      <div className="header">
-        <div className="header-titulo">
-          <img
-            src="https://lightblue-monkey-580531.hostingersite.com/wp-content/uploads/2026/09/logo-removebg-preview.png"
-            alt="Relinq"
-            className="logo-relinq"
-          />
-          <h1>Relinq Tracker</h1>
-        </div>
-        <div className="nav">
-          <Link href="/visao-geral">Visão geral</Link>
-          <Link href="/relatorios">Relatórios</Link>
-          <Link href="/jornada">Jornada do visitante</Link>
-          <Link href="/sites">+ Cadastrar LP</Link>
-          <button
-            className={"btn-modo-tv" + (modoTV ? " ativo" : "")}
-            onClick={function () {
-              setModoTV(!modoTV);
-            }}
-          >
-            📺 {modoTV ? "Sair do Modo TV" : "Modo TV"}
-          </button>
-          <button className="btn-sair" onClick={sair}>Sair</button>
-        </div>
-      </div>
-      <p className="atualizacao-automatica">
-        Atualiza automaticamente a cada 10s <Relogio />
-      </p>
-
+    <Shell
+      titulo="Painel por LP"
+      subtitulo={
+        <span className="atualizacao-automatica">
+          Atualiza sozinho a cada 10s <Relogio />
+        </span>
+      }
+    >
       {sites.length === 0 ? (
-        <p className="vazio">
-          Nenhuma LP cadastrada ainda. <Link href="/sites">Cadastre a primeira aqui</Link>.
-        </p>
+        <EstadoVazio
+          titulo="Nenhuma LP cadastrada ainda"
+          texto="Cadastre a primeira LP e cole o script do tracker nela. Os números aparecem aqui assim que chegar o primeiro evento."
+          acao={
+            <Link href="/sites" className="btn">
+              Cadastrar a primeira LP
+            </Link>
+          }
+        />
       ) : (
         <>
+          <div className="barra-filtros">
           <div className="filtros">
             <select
               value={siteSelecionado}
@@ -318,7 +404,7 @@ export default function Dashboard() {
                 setSiteSelecionado(e.target.value);
               }}
             >
-              <option value="todas">📊 Todas as LPs juntas</option>
+              <option value="todas">Todas as LPs juntas</option>
               {sites.map(function (s) {
                 return (
                   <option key={s.slug} value={s.slug}>
@@ -356,66 +442,93 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
+          </div>
 
-          {carregando && <p className="vazio">Carregando...</p>}
+          {carregando && <Esqueleto cartoes={6} />}
 
           {!carregando && stats && (
             <>
               <div className="cards">
-                <div className="card" style={{ "--acento": "#6366f1" }}>
-                  <div className="label">Visitantes únicos</div>
-                  <div className="valor">{stats.engajamento.visitantesUnicos}</div>
-                </div>
-                <div className="card" style={{ "--acento": "#f59e0b" }}>
-                  <div className="label">Cliques (todos os tipos)</div>
-                  <div className="valor">{cliquesTotais}</div>
-                </div>
-                <div className="card" style={{ "--acento": "#22c55e" }}>
-                  <div className="label">Conversões</div>
-                  <div className="valor">{conversoes}</div>
-                </div>
-                {quizzesFinalizados > 0 && (
-                  <div className="card" style={{ "--acento": "#38bdf8" }}>
-                    <div className="label">Quizzes finalizados</div>
-                    <div className="valor">{quizzesFinalizados}</div>
-                  </div>
+                <CartaoKpi
+                  rotulo="Visitantes únicos"
+                  valor={fmtN(k.visitantes)}
+                  acento="#6366f1"
+                  serie={serieDe(stats, "visitantes")}
+                  rodape={kAnt && <RodapeDelta atual={k.visitantes} anterior={kAnt.visitantes} formatar={fmtN} />}
+                />
+                <CartaoKpi
+                  rotulo="Cliques (todos os tipos)"
+                  valor={fmtN(k.cliques)}
+                  acento="#f59e0b"
+                  serie={serieDe(stats, "cliques")}
+                  rodape={kAnt && <RodapeDelta atual={k.cliques} anterior={kAnt.cliques} formatar={fmtN} />}
+                />
+                <CartaoKpi
+                  rotulo="Conversões"
+                  valor={fmtN(k.conversoes)}
+                  acento="#22c55e"
+                  serie={serieDe(stats, "conversoes")}
+                  rodape={kAnt && <RodapeDelta atual={k.conversoes} anterior={kAnt.conversoes} formatar={fmtN} />}
+                />
+                {k.quizzes > 0 && (
+                  <CartaoKpi
+                    rotulo="Quizzes finalizados"
+                    valor={fmtN(k.quizzes)}
+                    acento="#38bdf8"
+                    serie={serieDe(stats, "quizzes")}
+                    rodape={kAnt && <RodapeDelta atual={k.quizzes} anterior={kAnt.quizzes} formatar={fmtN} />}
+                  />
                 )}
-                {leadsCapturados > 0 && (
-                  <div className="card" style={{ "--acento": "#fb923c" }}>
-                    <div className="label">Leads capturados</div>
-                    <div className="valor">{leadsCapturados}</div>
-                  </div>
+                {k.leads > 0 && (
+                  <CartaoKpi
+                    rotulo="Leads capturados"
+                    valor={fmtN(k.leads)}
+                    acento="#fb923c"
+                    serie={serieDe(stats, "leads")}
+                    rodape={kAnt && <RodapeDelta atual={k.leads} anterior={kAnt.leads} formatar={fmtN} />}
+                  />
                 )}
-                {cardsCriados > 0 && (
-                  <div className="card" style={{ "--acento": "#14b8a6" }}>
-                    <div className="label">Cards criados</div>
-                    <div className="valor">{cardsCriados}</div>
-                  </div>
+                {k.cards > 0 && (
+                  <CartaoKpi
+                    rotulo="Cards criados"
+                    valor={fmtN(k.cards)}
+                    acento="#14b8a6"
+                    serie={serieDe(stats, "cards")}
+                    rodape={kAnt && <RodapeDelta atual={k.cards} anterior={kAnt.cards} formatar={fmtN} />}
+                  />
                 )}
-                {cardsCriados > 0 && (
-                  <div className="card" style={{ "--acento": "#14b8a6" }}>
-                    <div className="label">Taxa de cards</div>
-                    <div className="valor">{taxaCards}%</div>
-                    <div className="valor-secundario">dos visitantes únicos</div>
-                  </div>
+                {k.cards > 0 && (
+                  <CartaoKpi
+                    rotulo="Taxa de cards"
+                    valor={fmtPct1(k.taxaCards)}
+                    acento="#14b8a6"
+                    secundario="dos visitantes únicos"
+                    rodape={kAnt && <RodapePP atual={k.taxaCards} anterior={kAnt.taxaCards} />}
+                  />
                 )}
-                <div className="card" style={{ "--acento": "#22c55e" }}>
-                  <div className="label">Taxa de conversão</div>
-                  <div className="valor">{taxaConversao}%</div>
-                </div>
-                <div className="card" style={{ "--acento": "#f43f5e" }}>
-                  <div className="label">Taxa de rejeição</div>
-                  <div className="valor">{stats.engajamento.taxaRejeicao}%</div>
-                </div>
-                <div className="card" style={{ "--acento": "#a78bfa" }}>
-                  <div className="label">Tempo médio na página</div>
-                  <div className="valor">
-                    {stats.engajamento.tempoMedioSegundos !== null
-                      ? stats.engajamento.tempoMedioSegundos + "s"
-                      : "-"}
-                  </div>
-                </div>
+                <CartaoKpi
+                  rotulo="Taxa de conversão"
+                  valor={fmtPct1(k.taxaConversao)}
+                  acento="#22c55e"
+                  rodape={kAnt && <RodapePP atual={k.taxaConversao} anterior={kAnt.taxaConversao} />}
+                />
+                <CartaoKpi
+                  rotulo="Taxa de rejeição"
+                  valor={fmtPct1(k.taxaRejeicao)}
+                  acento="#f43f5e"
+                  rodape={kAnt && <RodapePP atual={k.taxaRejeicao} anterior={kAnt.taxaRejeicao} invertido />}
+                />
+                <CartaoKpi
+                  rotulo="Tempo médio na página"
+                  valor={fmtTempo(k.tempo)}
+                  acento="#a78bfa"
+                  rodape={kAnt && <RodapeDelta atual={k.tempo} anterior={kAnt.tempo} formatar={fmtTempo} />}
+                />
               </div>
+
+              <Secao id="funil" titulo="Funil de visitantes" aberta={!secoesFechadas.funil} aoAlternar={alternarSecao}>
+                <Funil funil={stats.funil} />
+              </Secao>
 
               <Secao id="painel-visual" titulo="Painel de gráficos" aberta={!secoesFechadas["painel-visual"]} aoAlternar={alternarSecao}>
                 <div className="graficos-topo">
@@ -428,6 +541,15 @@ export default function Dashboard() {
                     <GraficoPizza porDispositivo={stats.engajamento.porDispositivo} totalVisitas={visitas} />
                   </div>
                 </div>
+              </Secao>
+
+              <Secao
+                id="horarios"
+                titulo="Melhores horários"
+                aberta={!secoesFechadas.horarios}
+                aoAlternar={alternarSecao}
+              >
+                <MapaCalor dados={stats.mapaCalor} />
               </Secao>
 
               <Secao
@@ -458,7 +580,7 @@ export default function Dashboard() {
                     <input
                       className="busca-cliques"
                       type="text"
-                      placeholder="🔎 Filtrar por tipo ou botão..."
+                      placeholder="Filtrar por tipo ou botão…"
                       value={buscaCliques}
                       onChange={function (e) {
                         setBuscaCliques(e.target.value);
@@ -643,26 +765,7 @@ export default function Dashboard() {
           )}
         </>
       )}
-    </div>
-  );
-}
-
-function Secao({ titulo, aberta, aoAlternar, id, extra, children }) {
-  return (
-    <div className="secao">
-      <div className="secao-cabecalho">
-        <h2
-          onClick={function () {
-            aoAlternar(id);
-          }}
-        >
-          {titulo}
-          <span className={"secao-seta" + (aberta ? "" : " fechada")}>▾</span>
-        </h2>
-        {extra}
-      </div>
-      {aberta && children}
-    </div>
+    </Shell>
   );
 }
 
@@ -776,7 +879,11 @@ function GraficoPizza({ porDispositivo, totalVisitas }) {
                 strokeWidth={raio - raioInterno}
                 strokeDasharray={f.comprimento + " " + (circunferencia - f.comprimento)}
                 strokeDashoffset={-f.offset}
-              />
+              >
+                <title>
+                  {(f.rotulo || nomeAmigavelDispositivo(f.dispositivo)) + ": " + f.total + " (" + f.pct + "%)"}
+                </title>
+              </circle>
             );
           })}
         </g>
@@ -915,11 +1022,19 @@ function arredondarParaCima(valor) {
 }
 
 var ROTULOS_VIZ = {
-  tabela: "☰ Tabela",
-  grafico: "📊 Gráfico",
-  pizza: "🥧 Pizza",
-  colunas: "📈 Colunas",
-  barras: "▤ Barras",
+  tabela: "Tabela",
+  grafico: "Gráfico",
+  pizza: "Pizza",
+  colunas: "Colunas",
+  barras: "Barras",
+};
+
+var ICONES_VIZ = {
+  tabela: "tabela",
+  grafico: "grafico",
+  pizza: "pizza",
+  colunas: "colunas",
+  barras: "barras",
 };
 
 function SeletorVisualizacao({ id, valor, aoMudar, opcoes }) {
@@ -935,6 +1050,7 @@ function SeletorVisualizacao({ id, valor, aoMudar, opcoes }) {
               aoMudar(id, op);
             }}
           >
+            <Icone nome={ICONES_VIZ[op] || "grafico"} tamanho={15} />
             {ROTULOS_VIZ[op] || op}
           </button>
         );
@@ -1003,7 +1119,11 @@ function GraficoPizzaGenerico({ dados }) {
                 strokeWidth={raio - raioInterno}
                 strokeDasharray={f.comprimento + " " + (circunferencia - f.comprimento)}
                 strokeDashoffset={-f.offset}
-              />
+              >
+                <title>
+                  {(f.rotulo || nomeAmigavelDispositivo(f.dispositivo)) + ": " + f.total + " (" + f.pct + "%)"}
+                </title>
+              </circle>
             );
           })}
         </g>
@@ -1040,8 +1160,8 @@ function GraficoColunasGenerico({ dados }) {
   }
 
   var largura = 1200;
-  var altura = 340;
-  var margem = { topo: 24, baixo: 90, esq: 48, dir: 20 };
+  var altura = 380;
+  var margem = { topo: 30, baixo: 120, esq: 72, dir: 20 };
   var areaLargura = largura - margem.esq - margem.dir;
   var areaAltura = altura - margem.topo - margem.baixo;
 
@@ -1088,7 +1208,7 @@ function GraficoColunasGenerico({ dados }) {
               stroke="rgba(255,255,255,0.07)"
               strokeWidth="1"
             />
-            <text x={margem.esq - 10} y={linha.y + 4} fontSize="12" fill="#64748b" textAnchor="end">
+            <text x={margem.esq - 10} y={linha.y + 4} fontSize="19" fill="#64748b" textAnchor="end">
               {linha.rotulo}
             </text>
           </g>
@@ -1104,6 +1224,7 @@ function GraficoColunasGenerico({ dados }) {
         var rotuloCurto = d.rotulo.length > 18 ? d.rotulo.slice(0, 18) + "…" : d.rotulo;
         return (
           <g key={d.rotulo + "-" + i} filter="url(#sombra-coluna-generica)">
+            <title>{d.rotulo + ": " + d.total}</title>
             <rect
               x={x}
               y={y}
@@ -1113,14 +1234,14 @@ function GraficoColunasGenerico({ dados }) {
               fill="url(#col-generico-grad)"
             />
             {d.total > 0 && (
-              <text x={centroX} y={y - 6} fontSize="11" fill="#cbd5e1" textAnchor="middle">
+              <text x={centroX} y={y - 6} fontSize="16" fill="#cbd5e1" textAnchor="middle">
                 {d.total}
               </text>
             )}
             <text
               x={centroX}
               y={baseY}
-              fontSize="11"
+              fontSize="16"
               fill="#94a3b8"
               textAnchor="end"
               transform={"rotate(-40 " + centroX + " " + baseY + ")"}
@@ -1242,8 +1363,8 @@ function GraficoColunas({ serieDiaria }) {
   ];
 
   var largura = 1200;
-  var altura = 340;
-  var margem = { topo: 24, baixo: 36, esq: 48, dir: 20 };
+  var altura = 380;
+  var margem = { topo: 30, baixo: 52, esq: 72, dir: 20 };
   var areaLargura = largura - margem.esq - margem.dir;
   var areaAltura = altura - margem.topo - margem.baixo;
 
@@ -1307,7 +1428,7 @@ function GraficoColunas({ serieDiaria }) {
                 stroke="rgba(255,255,255,0.07)"
                 strokeWidth="1"
               />
-              <text x={margem.esq - 10} y={linha.y + 4} fontSize="12" fill="#64748b" textAnchor="end">
+              <text x={margem.esq - 10} y={linha.y + 4} fontSize="19" fill="#64748b" textAnchor="end">
                 {linha.rotulo}
               </text>
             </g>
@@ -1319,6 +1440,9 @@ function GraficoColunas({ serieDiaria }) {
           var xBase = coordXGrupo(i);
           return (
             <g key={p.dia} filter="url(#sombra-coluna)">
+              <title>
+                {p.dia.slice(8, 10) + "/" + p.dia.slice(5, 7) + ": " + p.visita + " visitas, " + p.cliques + " cliques, " + p.conversao + " conversões"}
+              </title>
               {series.map(function (s, j) {
                 var valor = p[s.chave];
                 var yTopo = coordY(valor);
@@ -1338,7 +1462,7 @@ function GraficoColunas({ serieDiaria }) {
                       <text
                         x={x + larguraColuna / 2}
                         y={yTopo - 6}
-                        fontSize="11"
+                        fontSize="16"
                         fill="#cbd5e1"
                         textAnchor="middle"
                       >
@@ -1359,11 +1483,11 @@ function GraficoColunas({ serieDiaria }) {
               key={p.dia}
               x={coordXGrupo(i) + larguraGrupoUtil / 2}
               y={altura - 10}
-              fontSize="12"
+              fontSize="19"
               fill="#94a3b8"
               textAnchor="middle"
             >
-              {p.dia.slice(5)}
+              {p.dia.slice(8, 10) + "/" + p.dia.slice(5, 7)}
             </text>
           ) : null;
         })}
@@ -1469,5 +1593,107 @@ function TabelaAgrupada({ dados, detalhamento }) {
         })}
       </tbody>
     </table>
+  );
+}
+
+// --- Funil: visitantes únicos que chegaram em cada etapa ---
+function Funil({ funil }) {
+  if (!funil || !funil.visitantes) {
+    return <p className="vazio">Sem visitantes nesse período.</p>;
+  }
+
+  var etapas = [
+    { nome: "Visitaram a página", n: funil.visitantes, cor: "#6366f1" },
+    { nome: "Clicaram em algum botão", n: funil.comClique, cor: "#06b6d4" },
+  ];
+  if (funil.comCard > 0) etapas.push({ nome: "Criaram um card", n: funil.comCard, cor: "#14b8a6" });
+  if (funil.comConversao > 0) etapas.push({ nome: "Converteram", n: funil.comConversao, cor: "#22c55e" });
+
+  return (
+    <div className="funil">
+      {etapas.map(function (e, i) {
+        var pctTotal = Math.min(100, (e.n / funil.visitantes) * 100);
+        var anterior = i > 0 ? etapas[i - 1].n : null;
+        var passo = anterior && e.n <= anterior ? (e.n / anterior) * 100 : null;
+        return (
+          <div className="funil-etapa" key={e.nome}>
+            <span className="funil-nome">{e.nome}</span>
+            <div className="funil-trilha">
+              <div className="funil-barra" style={{ width: Math.max(pctTotal, 1.5) + "%", background: e.cor }} />
+            </div>
+            <div className="funil-numeros">
+              <span className="funil-valor">{fmtN(e.n)}</span>
+              <span className="funil-info">{fmtPct1(pctTotal)} dos visitantes</span>
+              {passo != null && <span className="funil-info">{fmtPct1(passo)} da etapa anterior</span>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// --- Mapa de calor: visitas por dia da semana x hora do dia ---
+var DIAS_SEMANA = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"];
+
+function MapaCalor({ dados }) {
+  if (!dados || dados.length === 0) {
+    return <p className="vazio">Sem visitas nesse período.</p>;
+  }
+
+  // MySQL: DAYOFWEEK 1 = domingo ... 7 = sábado. Aqui a semana começa na segunda.
+  var matriz = [];
+  for (var d = 0; d < 7; d++) {
+    matriz.push([]);
+    for (var h = 0; h < 24; h++) matriz[d].push(0);
+  }
+  var maximo = 0;
+  dados.forEach(function (l) {
+    var linha = (l.dow + 5) % 7;
+    if (l.hora >= 0 && l.hora < 24) {
+      matriz[linha][l.hora] += l.total;
+      if (matriz[linha][l.hora] > maximo) maximo = matriz[linha][l.hora];
+    }
+  });
+
+  var horas = [];
+  for (var i = 0; i < 24; i++) horas.push(i);
+
+  return (
+    <div>
+      <div className="mapa-calor" role="img" aria-label="Mapa de calor das visitas por dia da semana e hora">
+        <span />
+        {horas.map(function (hora) {
+          return (
+            <span key={"h" + hora} className="mapa-calor-hora">
+              {hora % 3 === 0 ? hora + "h" : ""}
+            </span>
+          );
+        })}
+        {matriz.map(function (linha, di) {
+          return (
+            <Fragment key={di}>
+              <span className="mapa-calor-dia">{DIAS_SEMANA[di].slice(0, 3)}</span>
+              {linha.map(function (valor, hora) {
+                var p = valor > 0 ? Math.max(12, Math.round((valor / maximo) * 100)) : 0;
+                return (
+                  <span
+                    key={hora}
+                    className="mapa-calor-celula"
+                    style={{ "--p": p + "%" }}
+                    title={DIAS_SEMANA[di] + ", " + hora + "h: " + valor + (valor === 1 ? " visita" : " visitas")}
+                  />
+                );
+              })}
+            </Fragment>
+          );
+        })}
+      </div>
+      <div className="mapa-calor-legenda">
+        <span>menos visitas</span>
+        <span className="mapa-calor-escala" />
+        <span>mais visitas (pico: {fmtN(maximo)} numa hora)</span>
+      </div>
+    </div>
   );
 }

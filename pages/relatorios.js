@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import Relogio from "../components/Relogio";
+import Shell from "../components/Shell";
+import Secao from "../components/Secao";
+import CartaoKpi from "../components/CartaoKpi";
+import EstadoVazio from "../components/EstadoVazio";
+import Esqueleto from "../components/Esqueleto";
+import Icone from "../components/Icones";
+import { Delta, DeltaPP, variacao } from "../components/Delta";
 import estilos from "../styles/relatorios.module.css";
 
 // ---------- Formatação ----------
@@ -98,13 +104,6 @@ function derivar(m) {
   };
 }
 
-// Variação relativa (%) entre dois números.
-function variacao(atual, anterior) {
-  if (atual == null || anterior == null) return null;
-  if (anterior === 0) return atual === 0 ? { pct: 0 } : { novo: true };
-  return { pct: ((atual - anterior) / anterior) * 100 };
-}
-
 function valorDaMetrica(ponto, chave) {
   if (chave === "tempo") return ponto.tempoMedio;
   return ponto[chave];
@@ -120,67 +119,6 @@ function temCardsNosDados(dados) {
 }
 
 // ---------- Componentes pequenos ----------
-
-function Delta({ v }) {
-  if (!v) return null;
-  if (v.novo) {
-    return <span className={estilos.delta + " " + estilos.deltaNeutro}>sem base anterior</span>;
-  }
-  if (Math.abs(v.pct) < 0.05) {
-    return <span className={estilos.delta + " " + estilos.deltaNeutro}>sem variação</span>;
-  }
-  var sobe = v.pct > 0;
-  return (
-    <span className={estilos.delta + " " + (sobe ? estilos.deltaSobe : estilos.deltaDesce)}>
-      {sobe ? "▲" : "▼"} {nf1.format(Math.abs(v.pct))}%
-    </span>
-  );
-}
-
-// Variação em pontos percentuais (p.p.), pra métricas que já são porcentagem.
-function DeltaPP({ atual, anterior, invertido, neutro }) {
-  if (atual == null || anterior == null) return null;
-  var d = atual - anterior;
-  if (Math.abs(d) < 0.05) {
-    return <span className={estilos.delta + " " + estilos.deltaNeutro}>0,0 p.p.</span>;
-  }
-  var bom = invertido ? d < 0 : d > 0;
-  var classe = neutro ? estilos.deltaNeutro : bom ? estilos.deltaSobe : estilos.deltaDesce;
-  return (
-    <span className={estilos.delta + " " + classe}>
-      {(d > 0 ? "+" : "−") + nf1.format(Math.abs(d)) + " p.p."}
-    </span>
-  );
-}
-
-function CartaoKpi({ rotulo, valor, acento, rodape }) {
-  return (
-    <div className="card" style={{ "--acento": acento }}>
-      <div className="label">{rotulo}</div>
-      <div className="valor">{valor}</div>
-      {rodape && <div className={estilos.cartaoRodape}>{rodape}</div>}
-    </div>
-  );
-}
-
-function Secao({ id, titulo, aberta, aoAlternar, extra, children }) {
-  return (
-    <div className="secao">
-      <div className="secao-cabecalho">
-        <h2
-          onClick={function () {
-            aoAlternar(id);
-          }}
-        >
-          {titulo}
-          <span className={"secao-seta" + (aberta ? "" : " fechada")}>▾</span>
-        </h2>
-        {extra}
-      </div>
-      {aberta && children}
-    </div>
-  );
-}
 
 // ---------- Gráfico (SVG) com o período anterior sobreposto ----------
 
@@ -208,8 +146,8 @@ function montarCaminho(pontos, chave, xDe, yDe) {
 }
 
 function GraficoComparativo({ pontos, tipo, formatar, inteiro, cor, mostrarAnterior }) {
-  var LARGURA = 640;
-  var ALTURA = 260;
+  var LARGURA = 960;
+  var ALTURA = 300;
   var mEsq = 56;
   var mDir = 12;
   var mTopo = 12;
@@ -460,12 +398,6 @@ function exportarCsv(dados) {
 export default function Relatorios() {
   const router = useRouter();
 
-  function sair() {
-    fetch("/api/logout", { method: "POST" }).finally(function () {
-      router.push("/login");
-    });
-  }
-
   const [sites, setSites] = useState([]);
   const [selecionados, setSelecionados] = useState([]); // slugs; vazio = todas as LPs
   const [dataInicio, setDataInicio] = useState(
@@ -570,6 +502,10 @@ export default function Relatorios() {
   var temCards = !!dados && temCardsNosDados(dados);
   var chaveMetrica = metrica === "cards" && !temCards ? "visitantes" : metrica;
   var configMetrica = METRICAS_GRAFICO[chaveMetrica];
+  var serieVisitantes = dados ? dados.serie.map(function (s) { return s.atual.visitantes; }) : null;
+  var serieVisitas = dados ? dados.serie.map(function (s) { return s.atual.visitas; }) : null;
+  var serieCards = dados ? dados.serie.map(function (s) { return s.atual.cards; }) : null;
+
   var pontosGrafico = dados
     ? dados.serie.map(function (s) {
         return {
@@ -652,36 +588,26 @@ export default function Relatorios() {
   }
 
   return (
-    <div className="container">
-      <div className="header">
-        <div className="header-titulo">
-          <img
-            src="https://lightblue-monkey-580531.hostingersite.com/wp-content/uploads/2026/09/logo-removebg-preview.png"
-            alt="Relinq"
-            className="logo-relinq"
-          />
-          <h1>Relatórios</h1>
-        </div>
-        <div className="nav">
-          <Link href="/">← Painel por LP</Link>
-          <Link href="/visao-geral">Visão geral</Link>
-          <Link href="/jornada">Jornada do visitante</Link>
-          <button className="btn-sair" onClick={sair}>
-            Sair
-          </button>
-        </div>
-      </div>
-      <p className="atualizacao-automatica">
-        {dados
-          ? comparando
-            ? "Período " + dataBR(dados.periodo.inicio) + " a " + dataBR(dados.periodo.fim) + ", comparado com " + dataBR(dados.anterior.inicio) + " a " + dataBR(dados.anterior.fim)
-            : "Período " + dataBR(dados.periodo.inicio) + " a " + dataBR(dados.periodo.fim)
-          : "Carregando relatório..."}{" "}
-        <Relogio />
-      </p>
-
-      {/* --- Filtros --- */}
-      <div className={estilos.blocoSites}>
+    <Shell
+      titulo="Relatórios"
+      subtitulo={
+        dados ? (
+          comparando ? (
+            <span>
+              {dataBR(dados.periodo.inicio) + " a " + dataBR(dados.periodo.fim)}, comparado com{" "}
+              {dataBR(dados.anterior.inicio) + " a " + dataBR(dados.anterior.fim)}
+            </span>
+          ) : (
+            <span>{dataBR(dados.periodo.inicio) + " a " + dataBR(dados.periodo.fim)}</span>
+          )
+        ) : (
+          <span>Carregando relatório…</span>
+        )
+      }
+    >
+      {/* --- Filtros (fixos no topo ao rolar) --- */}
+      <div className="barra-filtros">
+        <div className={estilos.linhaChips}>
         <div className={estilos.chips} role="group" aria-label="Filtrar por LP">
           <button
             className={estilos.chip + (selecionados.length === 0 ? " " + estilos.chipAtivo : "")}
@@ -708,63 +634,62 @@ export default function Relatorios() {
             );
           })}
         </div>
-      </div>
+      <button
+        className="btn-atalho"
+        disabled={!dados || carregando || !!erro}
+        onClick={function () {
+          exportarCsv(dados);
+        }}
+      >
+        <Icone nome="download" tamanho={16} />
+        Exportar CSV
+      </button>
+        </div>
 
-      <div className="filtros" style={{ marginBottom: 14 }}>
-        <input
-          type="date"
-          value={dataInicio}
-          aria-label="Data inicial"
-          onChange={function (e) {
-            setDataInicio(e.target.value);
-          }}
-        />
-        <input
-          type="date"
-          value={dataFim}
-          aria-label="Data final"
-          onChange={function (e) {
-            setDataFim(e.target.value);
-          }}
-        />
-        <div className="atalhos">
-          <button className="btn-atalho" onClick={function () { aplicarAtalho(0); }}>Hoje</button>
-          <button className="btn-atalho" onClick={function () { aplicarAtalho(7); }}>7 dias</button>
-          <button className="btn-atalho" onClick={function () { aplicarAtalho(30); }}>30 dias</button>
-          <button className="btn-atalho" onClick={function () { aplicarAtalho(90); }}>90 dias</button>
+        <div className="filtros">
+          <input
+            type="date"
+            value={dataInicio}
+            aria-label="Data inicial"
+            onChange={function (e) {
+              setDataInicio(e.target.value);
+            }}
+          />
+          <input
+            type="date"
+            value={dataFim}
+            aria-label="Data final"
+            onChange={function (e) {
+              setDataFim(e.target.value);
+            }}
+          />
+          <div className="atalhos">
+            <button className="btn-atalho" onClick={function () { aplicarAtalho(0); }}>Hoje</button>
+            <button className="btn-atalho" onClick={function () { aplicarAtalho(7); }}>7 dias</button>
+            <button className="btn-atalho" onClick={function () { aplicarAtalho(30); }}>30 dias</button>
+            <button className="btn-atalho" onClick={function () { aplicarAtalho(90); }}>90 dias</button>
+          </div>
+          <label className={estilos.toggle}>
+            <input
+              type="checkbox"
+              checked={comparar}
+              onChange={function (e) {
+                setComparar(e.target.checked);
+              }}
+            />
+            Comparar com o período anterior
+          </label>
         </div>
       </div>
 
-      <div className={estilos.acoes}>
-        <label className={estilos.toggle}>
-          <input
-            type="checkbox"
-            checked={comparar}
-            onChange={function (e) {
-              setComparar(e.target.checked);
-            }}
-          />
-          Comparar com o período anterior
-        </label>
-        <button
-          className="btn-atalho"
-          disabled={!dados || carregando || !!erro}
-          onClick={function () {
-            exportarCsv(dados);
-          }}
-        >
-          Exportar CSV
-        </button>
-      </div>
-
       {erro && <p className="login-erro">{erro}</p>}
-      {carregando && !erro && <p className="vazio">Carregando...</p>}
+      {carregando && !erro && <Esqueleto cartoes={4} secoes={2} />}
 
       {!carregando && !erro && dados && semDados && (
-        <p className="vazio">
-          Nenhuma visita registrada nesse período para as LPs escolhidas. Tente um intervalo maior ou confira se o
-          tracker está instalado.
-        </p>
+        <EstadoVazio
+          titulo="Nenhuma visita nesse período"
+          texto="Tente um intervalo maior ou outra LP. Se a LP deveria ter visitas, confira se o script do tracker está instalado nela."
+        />
       )}
 
       {!carregando && !erro && dados && !semDados && (
@@ -775,11 +700,12 @@ export default function Relatorios() {
               rotulo="Visitantes únicos"
               valor={fmtNum(atual.visitantes)}
               acento="#6366f1"
+              serie={serieVisitantes}
               rodape={
                 comparando && (
                   <>
                     <Delta v={variacao(atual.visitantes, anterior.visitantes)} />
-                    <span className={estilos.base}>antes: {fmtNum(anterior.visitantes)}</span>
+                    <span className="card-base">antes: {fmtNum(anterior.visitantes)}</span>
                   </>
                 )
               }
@@ -788,11 +714,12 @@ export default function Relatorios() {
               rotulo="Visitas"
               valor={fmtNum(atual.visitas)}
               acento="#06b6d4"
+              serie={serieVisitas}
               rodape={
                 comparando && (
                   <>
                     <Delta v={variacao(atual.visitas, anterior.visitas)} />
-                    <span className={estilos.base}>antes: {fmtNum(anterior.visitas)}</span>
+                    <span className="card-base">antes: {fmtNum(anterior.visitas)}</span>
                   </>
                 )
               }
@@ -805,7 +732,7 @@ export default function Relatorios() {
                 comparando && (
                   <>
                     <Delta v={variacao(atual.tempoMedio, anterior.tempoMedio)} />
-                    <span className={estilos.base}>antes: {fmtTempo(anterior.tempoMedio)}</span>
+                    <span className="card-base">antes: {fmtTempo(anterior.tempoMedio)}</span>
                   </>
                 )
               }
@@ -818,7 +745,7 @@ export default function Relatorios() {
                 comparando && (
                   <>
                     <DeltaPP atual={atual.scroll[50]} anterior={anterior.scroll[50]} />
-                    <span className={estilos.base}>antes: {fmtPct(anterior.scroll[50])}</span>
+                    <span className="card-base">antes: {fmtPct(anterior.scroll[50])}</span>
                   </>
                 )
               }
@@ -828,11 +755,12 @@ export default function Relatorios() {
                 rotulo="Cards criados"
                 valor={fmtNum(atual.cards)}
                 acento="#14b8a6"
+                serie={serieCards}
                 rodape={
                   comparando && (
                     <>
                       <Delta v={variacao(atual.cards, anterior.cards)} />
-                      <span className={estilos.base}>antes: {fmtNum(anterior.cards)}</span>
+                      <span className="card-base">antes: {fmtNum(anterior.cards)}</span>
                     </>
                   )
                 }
@@ -846,7 +774,7 @@ export default function Relatorios() {
                 rodape={
                   <>
                     {comparando && <DeltaPP atual={atual.taxaCard} anterior={anterior.taxaCard} />}
-                    <span className={estilos.base}>
+                    <span className="card-base">
                       {comparando ? "antes: " + fmtPct(anterior.taxaCard) : "dos visitantes únicos"}
                     </span>
                   </>
@@ -972,6 +900,6 @@ export default function Relatorios() {
           </Secao>
         </div>
       )}
-    </div>
+    </Shell>
   );
 }

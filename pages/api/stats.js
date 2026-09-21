@@ -173,6 +173,67 @@ export default async function handler(req, res) {
       filtroData
     );
 
+    // --- Funil: quantos visitantes únicos chegaram em cada etapa ---
+    const [[{ visitantesComClique }]] = await pool.query(
+      `SELECT COUNT(DISTINCT visitor_id) AS visitantesComClique
+       FROM events
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento LIKE 'clique\\_%' AND visitor_id IS NOT NULL`,
+      filtroData
+    );
+    const [[{ visitantesComConversao }]] = await pool.query(
+      `SELECT COUNT(DISTINCT visitor_id) AS visitantesComConversao
+       FROM events
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento = 'conversao' AND visitor_id IS NOT NULL`,
+      filtroData
+    );
+
+    // --- Série diária pros mini gráficos (sparklines) dos cards ---
+    const [serieKpiBruta] = await pool.query(
+      `SELECT DATE_FORMAT(criado_em, '%Y-%m-%d') AS dia,
+              SUM(tipo_evento = 'visita') AS visitas,
+              COUNT(DISTINCT CASE WHEN tipo_evento = 'visita' THEN visitor_id END) AS visitantes,
+              SUM(tipo_evento LIKE 'clique\\_%') AS cliques,
+              SUM(tipo_evento = 'conversao') AS conversoes,
+              SUM(tipo_evento = 'card_criado') AS cards,
+              SUM(tipo_evento = 'lead_capturado') AS leads,
+              SUM(tipo_evento = 'quiz_finalizado') AS quizzes
+       FROM events
+       WHERE ${condSite}criado_em BETWEEN ? AND ?
+       GROUP BY dia
+       ORDER BY dia`,
+      filtroData
+    );
+    const serieKpi = serieKpiBruta.map(function (l) {
+      return {
+        dia: l.dia,
+        visitas: Number(l.visitas) || 0,
+        visitantes: Number(l.visitantes) || 0,
+        cliques: Number(l.cliques) || 0,
+        conversoes: Number(l.conversoes) || 0,
+        cards: Number(l.cards) || 0,
+        leads: Number(l.leads) || 0,
+        quizzes: Number(l.quizzes) || 0,
+      };
+    });
+
+    // --- Mapa de calor: visitas por dia da semana x hora ---
+    // criado_em está no fuso do servidor do banco. Se ele não for o horário
+    // de Brasília, defina TZ_OFFSET_HORAS (ex: -3 se o banco estiver em UTC).
+    const offsetBruto = parseInt(process.env.TZ_OFFSET_HORAS || "0", 10);
+    const offsetHoras = Number.isInteger(offsetBruto) ? Math.max(-23, Math.min(23, offsetBruto)) : 0;
+    const [mapaCalorBruto] = await pool.query(
+      `SELECT DAYOFWEEK(DATE_ADD(criado_em, INTERVAL ${offsetHoras} HOUR)) AS dow,
+              HOUR(DATE_ADD(criado_em, INTERVAL ${offsetHoras} HOUR)) AS hora,
+              COUNT(*) AS total
+       FROM events
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento = 'visita'
+       GROUP BY dow, hora`,
+      filtroData
+    );
+    const mapaCalor = mapaCalorBruto.map(function (l) {
+      return { dow: Number(l.dow), hora: Number(l.hora), total: Number(l.total) || 0 };
+    });
+
     // --- Dispositivo (mobile/tablet/desktop) ---
     const [porDispositivo] = await pool.query(
       `SELECT COALESCE(dispositivo, 'desconhecido') AS dispositivo, COUNT(*) AS total
@@ -266,6 +327,14 @@ export default async function handler(req, res) {
       cliquesPorCriativoDetalhado,
       cliquesPorTipo,
       cliquesPorRotulo,
+      serieKpi,
+      mapaCalor,
+      funil: {
+        visitantes: Number(visitantesUnicos),
+        comClique: Number(visitantesComClique),
+        comCard: Number(visitantesComCard),
+        comConversao: Number(visitantesComConversao),
+      },
       engajamento: {
         visitantesUnicos: Number(visitantesUnicos),
         visitantesComCard: Number(visitantesComCard),

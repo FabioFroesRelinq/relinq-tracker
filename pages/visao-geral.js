@@ -1,21 +1,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/router";
 import Relogio from "../components/Relogio";
+import Shell from "../components/Shell";
+import EstadoVazio from "../components/EstadoVazio";
+import Esqueleto from "../components/Esqueleto";
 
 function formatarData(date) {
   return date.toISOString().slice(0, 10);
 }
 
 export default function VisaoGeral() {
-  const router = useRouter();
-
-  function sair() {
-    fetch("/api/logout", { method: "POST" }).finally(function () {
-      router.push("/login");
-    });
-  }
-
   const [dataInicio, setDataInicio] = useState(
     formatarData(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
   );
@@ -56,27 +50,16 @@ export default function VisaoGeral() {
   }
 
   return (
-    <div className="container">
-      <div className="header">
-        <div className="header-titulo">
-          <img
-            src="https://lightblue-monkey-580531.hostingersite.com/wp-content/uploads/2026/09/logo-removebg-preview.png"
-            alt="Relinq"
-            className="logo-relinq"
-          />
-          <h1>Visão geral</h1>
-        </div>
-        <div className="nav">
-          <Link href="/">← Painel por LP</Link>
-          <Link href="/relatorios">Relatórios</Link>
-          <Link href="/jornada">Jornada do visitante</Link>
-          <button className="btn-sair" onClick={sair}>Sair</button>
-        </div>
-      </div>
-      <p className="atualizacao-automatica">
-        Atualiza automaticamente a cada 10s <Relogio />
-      </p>
+    <Shell
+      titulo="Visão geral"
+      subtitulo={
+        <span className="atualizacao-automatica">
+          Atualiza sozinho a cada 10s <Relogio />
+        </span>
+      }
+    >
 
+      <div className="barra-filtros">
       <div className="filtros">
         <input type="date" value={dataInicio} onChange={function (e) { setDataInicio(e.target.value); }} />
         <input type="date" value={dataFim} onChange={function (e) { setDataFim(e.target.value); }} />
@@ -87,13 +70,20 @@ export default function VisaoGeral() {
           <button className="btn-atalho" onClick={function () { aplicarAtalho(90); }}>90 dias</button>
         </div>
       </div>
+      </div>
 
-      {carregando && <p className="vazio">Carregando...</p>}
+      {carregando && <Esqueleto cartoes={0} secoes={1} />}
 
       {!carregando && dados && dados.sites.length === 0 && (
-        <p className="vazio">
-          Nenhuma LP cadastrada ainda. <Link href="/sites">Cadastre a primeira aqui</Link>.
-        </p>
+        <EstadoVazio
+          titulo="Nenhuma LP cadastrada ainda"
+          texto="Cadastre a primeira LP para comparar o desempenho entre elas."
+          acao={
+            <Link href="/sites" className="btn">
+              Cadastrar a primeira LP
+            </Link>
+          }
+        />
       )}
 
       {!carregando && dados && dados.sites.length > 0 && (
@@ -128,6 +118,6 @@ export default function VisaoGeral() {
           </table>
         </div>
       )}
-    </div>
+    </Shell>
   );
 }

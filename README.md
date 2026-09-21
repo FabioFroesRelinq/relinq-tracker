@@ -266,6 +266,18 @@ Na tag "Solicitação HTTP" vinculada ao trigger "Todos os Eventos - GA4":
   resumo em CSV. O tempo médio limita cada medição a 30 min
   (`TEMPO_MAXIMO_SEGUNDOS` em `pages/api/relatorios.js`) pra uma aba
   esquecida aberta não distorcer a média.
+- **`/tv` (modo TV)**: painel de números grandes que alterna sozinho entre
+  "todas as LPs" e cada LP. Período (hoje, 7 ou 30 dias) e tempo em cada
+  LP (10, 20 ou 30s) ficam salvos no navegador. Os controles aparecem ao
+  mexer o mouse; teclas: ← e → trocam de LP, espaço pausa, F tela cheia.
+- **Menu lateral e tema**: o menu fica fixo à esquerda (gaveta no celular) e
+  a barra de filtros acompanha a rolagem. O botão "Tema claro/escuro" no
+  menu guarda a escolha no navegador (padrão: escuro).
+- **Painel principal**: cada card mostra a tendência dos dias do período e a
+  variação contra o período anterior (mesma duração, logo antes). Também tem
+  o funil de visitantes (visita, clique, card, conversão) e o mapa de calor
+  de visitas por dia da semana e hora. O mapa usa o fuso do banco: se ele
+  estiver em UTC, defina `TZ_OFFSET_HORAS=-3` nas variáveis de ambiente.
 - **Cards criados (formulário da LP de evento)**: o próprio `tracker.js`
   observa a caixa de sucesso do formulário (`#reg-success`) e dispara
   `card_criado` quando ela aparece, ou seja, depois que o card foi criado
@@ -291,6 +303,17 @@ relinq-tracker/
   lib/auth-edge.js         -> mesma verificação de sessão, versão Edge Runtime (middleware)
   middleware.js             -> protege o painel e as APIs internas, exige login
   components/Relogio.js      -> relógio ao vivo no cabeçalho do painel
+  components/Shell.js          -> menu lateral, cabeçalho da página e tema claro/escuro
+  components/CartaoKpi.js       -> card de número com mini gráfico (sparkline)
+  components/Delta.js            -> variação ▲▼ (% e pontos percentuais)
+  components/Secao.js             -> seção recolhível
+  components/Icones.js             -> ícones (SVG) usados no lugar de emojis
+  components/Esqueleto.js           -> placeholder de carregamento
+  components/EstadoVazio.js          -> tela vazia com orientação
+  pages/_document.js                  -> fonte (Manrope) e tema aplicado sem piscar
+  pages/tv.js                          -> modo TV com rotação entre LPs
+  styles/shell.module.css               -> estilos do menu lateral
+  styles/tv.module.css                   -> estilos do modo TV
   pages/api/track.js          -> recebe eventos do tracker.js e (autenticado) do GTM server-side (pública, sem login)
   pages/api/sites.js            -> cadastra/lista as LPs (protegida)
   pages/api/stats.js              -> calcula as métricas do painel (protegida)
