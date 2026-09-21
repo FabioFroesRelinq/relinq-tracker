@@ -550,7 +550,9 @@ export default function Dashboard() {
                   serie={serieDe(stats, "cliques")}
                   rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.cliques} anterior={kAnt.cliques} formatar={fmtN} />}
                 />
-                {metaKey !== "conversao" && (
+                {/* Conversões só aparecem como card "comum" no modo automático (sem meta). Com meta
+                    de conversão elas viram os cards da meta; com meta de card ou WhatsApp, não aparecem. */}
+                {metaKey === null && (
                   <CartaoKpi
                     rotulo="Conversões"
                     valor={fmtN(k.conversoes)}
@@ -595,7 +597,7 @@ export default function Dashboard() {
                     rodape={kAnt && <RodapePP rotulo={rotuloAntes} atual={k.taxaCards} anterior={kAnt.taxaCards} />}
                   />
                 )}
-                {metaKey !== "conversao" && (
+                {metaKey === null && (
                   <CartaoKpi
                     rotulo="Taxa de conversão"
                     valor={fmtPct1(k.taxaConversao)}
