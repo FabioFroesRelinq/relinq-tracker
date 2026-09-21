@@ -1,0 +1,74 @@
+.bloco {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.select {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.92rem;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--borda-forte);
+  background: var(--superficie-3);
+  color: var(--texto);
+}
+
+.select:focus {
+  outline: none;
+  border-color: var(--primaria);
+  box-shadow: 0 0 0 3px var(--primaria-suave);
+}
+
+.ajuda {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--texto-mudo);
+}
+
+.personalizar {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0 !important;
+  font-size: 0.88rem !important;
+  color: var(--texto-medio) !important;
+  cursor: pointer;
+}
+
+.personalizar input {
+  width: 16px !important;
+  height: 16px;
+  padding: 0 !important;
+  accent-color: var(--primaria);
+}
+
+.lista {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--superficie-3);
+}
+
+.item {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  margin: 0 !important;
+  padding: 4px 0;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  color: var(--texto-medio) !important;
+  cursor: pointer;
+}
+
+.item input {
+  width: 16px !important;
+  height: 16px;
+  padding: 0 !important;
+  accent-color: var(--primaria);
+}

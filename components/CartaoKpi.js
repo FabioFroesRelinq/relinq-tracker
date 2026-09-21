@@ -30,13 +30,14 @@ export function Sparkline({ valores }) {
 }
 
 // Card de número: rótulo, valor, rodapé (variação etc.) e, se houver, tendência.
-export default function CartaoKpi({ rotulo, valor, acento, rodape, serie, secundario }) {
+export default function CartaoKpi({ rotulo, valor, acento, rodape, serie, secundario, destaque }) {
   var temSpark = serie && serie.length > 1;
   return (
     <div className={"card" + (temSpark ? "" : " card-sem-spark")} style={{ "--acento": acento }}>
       <div className="card-topo">
         <span className="card-ponto" />
         <span className="label">{rotulo}</span>
+        {destaque && <span className="card-selo">{destaque}</span>}
       </div>
       <div className="valor">{valor}</div>
       {secundario && <div className="valor-secundario">{secundario}</div>}

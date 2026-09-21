@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import Shell from "../components/Shell";
 import SeletorCor from "../components/SeletorCor";
+import PerfilLPCampos from "../components/PerfilLPCampos";
+import { esperadosPadrao, lerEsperados } from "../lib/perfil";
 import { PontoLP } from "../components/coresLP";
 
 export default function CadastroSites() {
@@ -8,6 +10,8 @@ export default function CadastroSites() {
   const [nome, setNome] = useState("");
   const [dominio, setDominio] = useState("");
   const [cor, setCor] = useState("");
+  const [perfil, setPerfil] = useState({ meta: "", esperados: esperadosPadrao(null), personalizado: false });
+  const [perfilEdicao, setPerfilEdicao] = useState({ meta: "", esperados: esperadosPadrao(null), personalizado: false });
   const [mensagem, setMensagem] = useState("");
   const [editando, setEditando] = useState(null); // guarda o site em edição, ou null
 
@@ -28,7 +32,13 @@ export default function CadastroSites() {
     fetch("/api/sites", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nome: nome, dominio: dominio, cor: cor }),
+      body: JSON.stringify({
+        nome: nome,
+        dominio: dominio,
+        cor: cor,
+        meta_principal: perfil.meta,
+        eventos_esperados: perfil.personalizado ? perfil.esperados : "",
+      }),
     })
       .then(function (r) {
         return r.json().then(function (dados) {
@@ -42,11 +52,15 @@ export default function CadastroSites() {
               resultado.dados.slug +
               (resultado.dados.corSalva === false
                 ? ". A cor não foi salva: falta rodar o db/migration-4.sql no banco (veja o README)."
+                : "") +
+              (resultado.dados.perfilSalvo === false
+                ? ". O perfil (meta e eventos esperados) não foi salvo: falta rodar o db/migration-6.sql no banco (veja o README)."
                 : "")
           );
           setNome("");
           setDominio("");
           setCor("");
+          setPerfil({ meta: "", esperados: esperadosPadrao(null), personalizado: false });
           carregarSites();
         } else {
           setMensagem(resultado.dados.erro || "Erro ao cadastrar");
@@ -56,6 +70,12 @@ export default function CadastroSites() {
 
   function iniciarEdicao(site) {
     setEditando({ id: site.id, nome: site.nome, dominio: site.dominio || "", cor: site.cor || "" });
+    var salvos = lerEsperados(site.eventos_esperados);
+    setPerfilEdicao({
+      meta: site.meta_principal || "",
+      personalizado: !!salvos,
+      esperados: salvos || esperadosPadrao(site.meta_principal || null),
+    });
   }
 
   function salvarEdicao(e) {
@@ -64,12 +84,19 @@ export default function CadastroSites() {
     fetch("/api/sites", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(editando),
+      body: JSON.stringify(
+        Object.assign({}, editando, {
+          meta_principal: perfilEdicao.meta,
+          eventos_esperados: perfilEdicao.personalizado ? perfilEdicao.esperados : "",
+        })
+      ),
     }).then(function (r) {
       if (r.ok) {
         r.json().then(function (dados) {
           if (dados && dados.corSalva === false) {
             setMensagem("A cor não foi salva: falta rodar o db/migration-4.sql no banco (veja o README).");
+          } else if (dados && dados.perfilSalvo === false) {
+            setMensagem("O perfil não foi salvo: falta rodar o db/migration-6.sql no banco (veja o README).");
           }
         });
         setEditando(null);
@@ -114,6 +141,8 @@ export default function CadastroSites() {
 
         <label>Cor de destaque (opcional)</label>
         <SeletorCor valor={cor} aoMudar={setCor} />
+
+        <PerfilLPCampos valor={perfil} aoMudar={setPerfil} />
 
         <button className="btn" type="submit">
           Cadastrar
@@ -200,6 +229,8 @@ export default function CadastroSites() {
                 setEditando(Object.assign({}, editando, { cor: nova }));
               }}
             />
+
+            <PerfilLPCampos valor={perfilEdicao} aoMudar={setPerfilEdicao} />
 
             <p className="vazio" style={{ marginTop: 8 }}>
               O slug (usado no data-site do snippet) não muda ao editar, pra não quebrar

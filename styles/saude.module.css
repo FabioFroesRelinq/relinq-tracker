@@ -93,6 +93,18 @@
   color: var(--texto-forte);
 }
 
+.metaLP {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primaria-texto);
+}
+
+.avisoAlerta {
+  background: rgba(245, 158, 11, 0.13);
+}
+
 .dominio {
   font-size: 0.82rem;
   color: var(--texto-mudo);

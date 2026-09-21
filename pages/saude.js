@@ -5,6 +5,7 @@ import Icone from "../components/Icones";
 import Esqueleto from "../components/Esqueleto";
 import EstadoVazio from "../components/EstadoVazio";
 import { PontoLP } from "../components/coresLP";
+import { METAS, rotuloEvento } from "../lib/perfil";
 import estilos from "../styles/saude.module.css";
 
 var nf = new Intl.NumberFormat("pt-BR");
@@ -34,22 +35,30 @@ var STATUS = {
   sem_dados: { rotulo: "Nenhum evento recebido", classe: "semDados" },
 };
 
-// Eventos que o tracker.js envia sozinho em qualquer LP.
-var NUCLEO = [
-  { chave: "visita", rotulo: "Visitas" },
-  { chave: "scroll_profundidade", rotulo: "Rolagem" },
-  { chave: "tempo_pagina", rotulo: "Tempo na página" },
-];
-
 // Outros eventos: só aparecem quando existem.
 var EXTRAS = [
   { chave: "cliques", rotulo: "Cliques" },
+  { chave: "whatsapp_aberto", rotulo: "WhatsApp aberto" },
+  { chave: "whatsapp_nao_abriu", rotulo: "WhatsApp não abriu" },
   { chave: "card_criado", rotulo: "Cards criados" },
   { chave: "conversao", rotulo: "Conversões" },
   { chave: "video", rotulo: "Vídeo" },
   { chave: "quiz", rotulo: "Quiz" },
   { chave: "gtm", rotulo: "Eventos do GTM" },
 ];
+
+function haQuantoEvento(min) {
+  if (min == null) return "";
+  if (min < 60) return min + " min";
+  if (min < 1440) return Math.floor(min / 60) + " h";
+  return Math.floor(min / 1440) + (Math.floor(min / 1440) === 1 ? " dia" : " dias");
+}
+
+// Texto curto do que está errado com um evento esperado.
+function problemaEsperado(e) {
+  if (e.situacao === "parou") return rotuloEvento(e.chave) + " (parou de chegar há " + haQuantoEvento(e.minUltimo) + ")";
+  return rotuloEvento(e.chave) + " (nenhum em 7 dias)";
+}
 
 function diagnostico(s) {
   if (s.status === "sem_dados") {
@@ -81,6 +90,9 @@ function CartaoSaude({ s, copiado, aoCopiar }) {
           <div>
             <h2>{s.nome}</h2>
             <span className={estilos.dominio}>{s.dominio || s.slug}</span>
+            {s.perfil.meta && METAS[s.perfil.meta] && (
+              <span className={estilos.metaLP}>Meta: {METAS[s.perfil.meta].rotulo}</span>
+            )}
           </div>
         </div>
         <span className={estilos.selo + " " + estilos[st.classe]}>{texto}</span>
@@ -122,28 +134,42 @@ function CartaoSaude({ s, copiado, aoCopiar }) {
       <div>
         <div className={estilos.rotuloBloco}>Recebidos nos últimos 7 dias</div>
         <ul className={estilos.eventos}>
-          {NUCLEO.map(function (e) {
-            var c = s.categorias[e.chave];
-            var faltando = !c;
-            // Se nem visita chegou, não faz sentido cobrar rolagem e tempo.
-            var cobrar = faltando && visitas > 0;
+          {s.esperados.map(function (e) {
+            var classe =
+              e.situacao === "ok"
+                ? estilos.eventoOk
+                : e.situacao === "sem_base"
+                ? estilos.eventoVazio
+                : estilos.eventoAlerta;
+            var texto =
+              e.situacao === "ok"
+                ? fmtN(e.total)
+                : e.situacao === "parou"
+                ? "parou há " + haQuantoEvento(e.minUltimo)
+                : e.situacao === "falta"
+                ? "não chegou"
+                : "pouco tráfego";
             return (
               <li
                 key={e.chave}
-                className={estilos.evento + " " + (c ? estilos.eventoOk : cobrar ? estilos.eventoAlerta : estilos.eventoVazio)}
+                className={estilos.evento + " " + classe}
                 title={
-                  cobrar
-                    ? "O tracker.js envia esse evento sozinho. Se não chega, o script da LP pode estar desatualizado."
+                  e.situacao === "falta" || e.situacao === "parou"
+                    ? "Evento esperado para esta LP. Confira o script do tracker e o perfil da LP em Cadastrar LP."
+                    : e.situacao === "sem_base"
+                    ? "Pouco tráfego nos últimos 7 dias para cobrar este evento."
                     : undefined
                 }
               >
-                {e.rotulo}
-                <strong>{c ? fmtN(c.total) : "não chegou"}</strong>
+                {rotuloEvento(e.chave)}
+                <strong>{texto}</strong>
               </li>
             );
           })}
           {EXTRAS.filter(function (e) {
-            return s.categorias[e.chave];
+            return s.categorias[e.chave] && !s.esperados.some(function (x) {
+              return x.chave === e.chave;
+            });
           }).map(function (e) {
             return (
               <li key={e.chave} className={estilos.evento + " " + estilos.eventoNeutro}>
@@ -205,6 +231,19 @@ function CartaoSaude({ s, copiado, aoCopiar }) {
             </p>
           )}
         </div>
+      )}
+
+      {s.alertasEsperados > 0 && (
+        <p className={estilos.aviso + " " + estilos.avisoAlerta}>
+          Evento esperado sem chegar:{" "}
+          {s.esperados
+            .filter(function (e) {
+              return e.situacao === "falta" || e.situacao === "parou";
+            })
+            .map(problemaEsperado)
+            .join("; ")}
+          .
+        </p>
       )}
 
       {aviso && <p className={estilos.aviso}>{aviso}</p>}
@@ -274,9 +313,11 @@ export default function SaudeTracking() {
   }
 
   var contagem = { ok: 0, atencao: 0, parado: 0, sem_dados: 0 };
+  var comEsperadoFaltando = 0;
   if (dados) {
     dados.sites.forEach(function (s) {
       contagem[s.status] += 1;
+      if (s.alertasEsperados > 0) comEsperadoFaltando += 1;
     });
   }
 
@@ -319,6 +360,11 @@ export default function SaudeTracking() {
             )}
             {contagem.parado > 0 && (
               <span className={estilos.selo + " " + estilos.parado}>{contagem.parado} parada{contagem.parado > 1 ? "s" : ""}</span>
+            )}
+            {comEsperadoFaltando > 0 && (
+              <span className={estilos.selo + " " + estilos.atencao}>
+                {comEsperadoFaltando} com evento esperado faltando
+              </span>
             )}
             {contagem.sem_dados > 0 && (
               <span className={estilos.selo + " " + estilos.semDados}>{contagem.sem_dados} sem nenhum evento</span>

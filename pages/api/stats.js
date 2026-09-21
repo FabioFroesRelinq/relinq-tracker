@@ -196,6 +196,29 @@ export default async function handler(req, res) {
       filtroData
     );
 
+    // --- WhatsApp: quem clicou e quem realmente abriu ---
+    // "whatsapp_aberto" / "whatsapp_nao_abriu" vêm do tracker.js (a página saiu de
+    // cena depois do clique, ou não). Tudo por VISITANTE, não por clique, e quem
+    // tem "aberto" nunca conta como "não abriu" (MAX por visitante). LPs que ainda
+    // usam um tracker.js antigo não geram esses eventos: por isso "verificados".
+    const [[waClicaram]] = await pool.query(
+      `SELECT COUNT(DISTINCT visitor_id) AS clicaram
+       FROM events
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento = 'clique_whatsapp' AND visitor_id IS NOT NULL`,
+      filtroData
+    );
+    const [[waVerif]] = await pool.query(
+      `SELECT COUNT(*) AS verificados, COALESCE(SUM(abriu), 0) AS abriram
+       FROM (
+         SELECT visitor_id, MAX(tipo_evento = 'whatsapp_aberto') AS abriu
+         FROM events
+         WHERE ${condSite}criado_em BETWEEN ? AND ?
+           AND tipo_evento IN ('whatsapp_aberto', 'whatsapp_nao_abriu') AND visitor_id IS NOT NULL
+         GROUP BY visitor_id
+       ) t`,
+      filtroData
+    );
+
     // --- Série diária pros mini gráficos (sparklines) dos cards ---
     const [serieKpiBruta] = await pool.query(
       `SELECT DATE_FORMAT(criado_em, '%Y-%m-%d') AS dia,
@@ -205,7 +228,9 @@ export default async function handler(req, res) {
               SUM(tipo_evento = 'conversao') AS conversoes,
               SUM(tipo_evento = 'card_criado') AS cards,
               SUM(tipo_evento = 'lead_capturado') AS leads,
-              SUM(tipo_evento = 'quiz_finalizado') AS quizzes
+              SUM(tipo_evento = 'quiz_finalizado') AS quizzes,
+              SUM(tipo_evento = 'clique_whatsapp') AS wa_cliques,
+              SUM(tipo_evento = 'whatsapp_aberto') AS wa_abertos
        FROM events
        WHERE ${condSite}criado_em BETWEEN ? AND ?
        GROUP BY dia
@@ -222,6 +247,8 @@ export default async function handler(req, res) {
         cards: Number(l.cards) || 0,
         leads: Number(l.leads) || 0,
         quizzes: Number(l.quizzes) || 0,
+        whatsappCliques: Number(l.wa_cliques) || 0,
+        whatsappAbertos: Number(l.wa_abertos) || 0,
       };
     });
 
@@ -401,6 +428,9 @@ export default async function handler(req, res) {
         comClique: Number(visitantesComClique),
         comCard: Number(visitantesComCard),
         comConversao: Number(visitantesComConversao),
+        comCliqueWhatsapp: Number(waClicaram.clicaram) || 0,
+        whatsappVerificados: Number(waVerif.verificados) || 0,
+        whatsappAbriram: Number(waVerif.abriram) || 0,
       },
       engajamento: {
         visitantesUnicos: Number(visitantesUnicos),

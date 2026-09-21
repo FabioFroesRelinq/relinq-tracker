@@ -28,6 +28,7 @@ uma nova publicação.
    mysql -u root -p relinq_tracker_db < db/migration-3.sql
    mysql -u root -p relinq_tracker_db < db/migration-4.sql   # cor das LPs (opcional)
    mysql -u root -p relinq_tracker_db < db/migration-5.sql   # geografia dos visitantes (opcional)
+   mysql -u root -p relinq_tracker_db < db/migration-6.sql   # perfil da LP: meta e eventos esperados (opcional)
    ```
    Na Hostinger (via phpMyAdmin), é o mesmo conteúdo, só sem os comandos
    `CREATE DATABASE`/`USE` — cole direto com o banco certo já selecionado.
@@ -268,6 +269,26 @@ Na tag "Solicitação HTTP" vinculada ao trigger "Todos os Eventos - GA4":
   resumo em CSV. O tempo médio limita cada medição a 30 min
   (`TEMPO_MAXIMO_SEGUNDOS` em `pages/api/relatorios.js`) pra uma aba
   esquecida aberta não distorcer a média.
+- **WhatsApp: abriu de verdade?** Todo clique em link de WhatsApp (`wa.me`,
+  `api.whatsapp.com`, `whatsapp:`) continua gerando `clique_whatsapp`; em seguida
+  o `tracker.js` confere se a página saiu de cena (o app ou a aba do WhatsApp Web
+  assumiu a tela): em até 3 s gera `whatsapp_aberto` (com `valor` = ms até sair);
+  se nada acontecer, `whatsapp_nao_abriu`; se sair depois (até 15 s, ex: o iPhone
+  pergunta "Abrir no WhatsApp?"), gera também `whatsapp_aberto`. O painel conta
+  por **visitante** (quem tem "aberto" nunca vira "não abriu") e clique duplo em
+  menos de 3 s conta uma vez. Vale nas LPs que já estão no ar, sem reinstalar: o
+  script é servido pelo próprio tracker. Só mede a abertura de quem clica depois
+  da atualização (por isso o painel mostra "medida em X de Y"). Importante: isso
+  prova que o WhatsApp abriu, **não** que a mensagem foi enviada.
+- **Perfil da LP (meta principal e eventos esperados)**: em "Cadastrar LP" cada
+  LP escolhe a meta (card criado, conversão ou contato no WhatsApp) e, se
+  quiser, os eventos esperados. Com meta, o painel mostra cards "Meta" no topo,
+  o funil e o resumo seguem a meta, e a TV usa os números dela. Em "Todas as
+  LPs", vale a meta em comum (se as LPs tiverem metas diferentes, fica o modo
+  automático). A tela **Saúde do tracking** avisa quando um evento esperado
+  some (evento frequente sem chegar há mais de 24 h) ou nunca chega (com pelo
+  menos 20 visitas em 7 dias). Precisa de `db/migration-6.sql`; sem ela tudo
+  segue no modo automático.
 - **Geografia ("De onde vêm os visitantes")**: ranking de estados e cidades dos
   visitantes, com quantos cards cada um gerou, uma frase no resumo e os estados
   na TV. O `/api/track` lê os cabeçalhos que a **Vercel** envia
@@ -353,6 +374,9 @@ relinq-tracker/
   components/Relogio.js      -> relógio ao vivo no cabeçalho do painel
   components/Resumo.js         -> resumo em linguagem natural (painel e relatórios)
   components/geo.js              -> nomes dos estados e cidades (sigla -> nome)
+  components/PerfilLPCampos.js    -> meta e eventos esperados no cadastro de LPs
+  lib/perfil.js                    -> catálogo de metas/eventos esperados e números da meta
+  db/migration-6.sql                -> colunas meta_principal e eventos_esperados em sites
   db/migration-5.sql              -> colunas pais/estado/cidade em events (geografia)
   components/useAvisoCards.js   -> consulta cards novos, popup, som e notificação do sistema
   components/AvisosCards.js      -> popup "Novo card criado"

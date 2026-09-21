@@ -1,4 +1,5 @@
 import { getPool } from "../../lib/db";
+import { metaValida, lerEsperados, esperadosPadrao, ehFrequente } from "../../lib/perfil";
 
 // Limites (em minutos desde o último evento) pro semáforo de cada LP.
 const LIMITE_OK_MIN = 60; // até 1 h: recebendo dados
@@ -9,6 +10,30 @@ function calcularStatus(minutos) {
   if (minutos <= LIMITE_OK_MIN) return "ok";
   if (minutos <= LIMITE_ATENCAO_MIN) return "atencao";
   return "parado";
+}
+
+// --- Eventos esperados (perfil da LP) ---
+const TRAFEGO_MINIMO_7D = 20; // com menos visitas que isso não dá pra cobrar eventos raros
+const PARADO_FREQUENTE_MIN = 24 * 60; // evento frequente sem chegar há mais de 24 h
+
+// situacao: "ok" | "parou" | "falta" | "sem_base"
+function avaliarEsperado(chave, categorias, visitas7d, minUltimoSite) {
+  const c = categorias[chave];
+  const total = c ? c.total : 0;
+  const minUltimo = c ? c.minUltimo : null;
+
+  let situacao;
+  if (total > 0) {
+    // Frequente que sumiu enquanto a LP continua mandando outras coisas
+    const sumiu =
+      ehFrequente(chave) && minUltimo != null && minUltimo > PARADO_FREQUENTE_MIN && minUltimoSite != null && minUltimoSite <= PARADO_FREQUENTE_MIN;
+    situacao = sumiu ? "parou" : "ok";
+  } else if (chave === "visita" || visitas7d >= TRAFEGO_MINIMO_7D) {
+    situacao = "falta";
+  } else {
+    situacao = "sem_base"; // pouco tráfego: ainda não dá pra saber
+  }
+  return { chave, situacao, total, minUltimo };
 }
 
 // Agrupa tipos de evento parecidos (clique_*, video_*...) numa categoria só.
@@ -44,12 +69,25 @@ export default async function handler(req, res) {
     const pool = getPool();
 
     // "cor" só existe depois da migration-4; sem ela, cai na consulta sem a coluna.
-    let sites;
-    try {
-      [sites] = await pool.query("SELECT id, slug, nome, dominio, cor FROM sites ORDER BY nome");
-    } catch (e) {
-      [sites] = await pool.query("SELECT id, slug, nome, dominio FROM sites ORDER BY nome");
-    }
+    // "cor", "meta_principal" e "eventos_esperados" só existem depois das migrations 4 e 6.
+    const [colunasSites] = await pool.query("SHOW COLUMNS FROM sites");
+    const existentes = new Set(
+      colunasSites.map(function (c) {
+        return c.Field;
+      })
+    );
+    const extras = ["cor", "meta_principal", "eventos_esperados"].filter(function (c) {
+      return existentes.has(c);
+    });
+    const [sites] = await pool.query(
+      "SELECT id, slug, nome, dominio" +
+        extras
+          .map(function (c) {
+            return ", " + c;
+          })
+          .join("") +
+        " FROM sites ORDER BY nome"
+    );
 
     // Todas as idades são calculadas no próprio banco (NOW()), pra não depender
     // de o servidor da aplicação e o banco estarem no mesmo fuso.
@@ -145,6 +183,13 @@ export default async function handler(req, res) {
       const id = Number(s.id);
       const min = ultimoPorSite.has(id) ? ultimoPorSite.get(id) : null;
       const q = qualidadePorSite.get(id) || { eventos: 0, semVisitor: 0, visitas: 0, visitasUtm: 0 };
+      const categorias = categoriasPorSite.get(id) || {};
+      const meta = metaValida(s.meta_principal);
+      const listaPropria = lerEsperados(s.eventos_esperados);
+      const visitas7d = categorias.visita ? categorias.visita.total : 0;
+      const esperados = (listaPropria || esperadosPadrao(meta)).map(function (chave) {
+        return avaliarEsperado(chave, categorias, visitas7d, min);
+      });
       return {
         id: s.id,
         slug: s.slug,
@@ -153,7 +198,12 @@ export default async function handler(req, res) {
         cor: s.cor || null,
         status: calcularStatus(min),
         minUltimoEvento: min,
-        categorias: categoriasPorSite.get(id) || {},
+        categorias,
+        perfil: { meta, personalizado: !!listaPropria },
+        esperados,
+        alertasEsperados: esperados.filter(function (e) {
+          return e.situacao === "falta" || e.situacao === "parou";
+        }).length,
         horas: horasPorSite.get(id) || new Array(24).fill(0),
         qualidade: {
           eventos7d: q.eventos,

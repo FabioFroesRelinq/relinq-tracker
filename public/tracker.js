@@ -13,6 +13,11 @@
  * clique separado no painel (clique_whatsapp, clique_cta, clique_checkout, etc.
  * podem conviver na mesma LP, cada um contado à parte).
  *
+ * WhatsApp: todo clique em link de WhatsApp (wa.me, api.whatsapp.com, whatsapp:)
+ * gera "clique_whatsapp" e, em seguida, o tracker confere se o WhatsApp abriu de
+ * verdade: "whatsapp_aberto" (a página saiu de cena) ou "whatsapp_nao_abriu"
+ * (nada aconteceu em 3s). Clique duplo em menos de 3s conta uma vez só.
+ *
  * Pra marcar uma conversão de verdade (ex: pagamento confirmado, cadastro concluído):
  *   relinqTrack('conversao')
  *
@@ -172,11 +177,78 @@
     );
   }
 
+  // --- Validação de abertura do WhatsApp ---
+  // O site não sabe se a pessoa realmente mandou mensagem, mas sabe se o
+  // WhatsApp ABRIU: quando o app (ou a aba do WhatsApp Web) assume a tela, a
+  // página fica oculta ("visibilitychange") ou é descarregada ("pagehide").
+  // Depois de cada clique em WhatsApp o tracker vigia isso:
+  //   - página saiu de cena em até 3s  -> "whatsapp_aberto" (valor = ms até sair)
+  //   - nada aconteceu em 3s           -> "whatsapp_nao_abriu"
+  //   - saiu depois, até 15s (ex: o iPhone pergunta "Abrir no WhatsApp?" antes)
+  //                                     -> "whatsapp_aberto" também; o painel conta
+  //                                        por visitante, então quem abriu não vira "não abriu".
+  // Clique duplo (mesmo visitante em menos de 3s) conta uma vez só. O clique
+  // segue sendo registrado como "clique_whatsapp", como sempre.
+  var WA_JANELA_MS = 3000;
+  var WA_JANELA_TARDIA_MS = 15000;
+  var WA_DUPLO_MS = 3000;
+  var waUltimoClique = 0;
+
+  function vigiarAberturaWhatsapp(extra) {
+    var inicio = Date.now();
+    var abriu = false;
+    var tNaoAbriu = null;
+    var tFim = null;
+
+    function limpar() {
+      document.removeEventListener("visibilitychange", aoMudarVisibilidade);
+      window.removeEventListener("pagehide", aoSair);
+      clearTimeout(tNaoAbriu);
+      clearTimeout(tFim);
+    }
+
+    function marcarAberto() {
+      if (abriu) return;
+      abriu = true;
+      limpar();
+      enviarPayload(montarPayload("whatsapp_aberto", Object.assign({ valor: Date.now() - inicio }, extra)));
+    }
+
+    function aoMudarVisibilidade() {
+      if (document.visibilityState === "hidden") marcarAberto();
+    }
+
+    function aoSair() {
+      marcarAberto();
+    }
+
+    document.addEventListener("visibilitychange", aoMudarVisibilidade);
+    window.addEventListener("pagehide", aoSair);
+
+    tNaoAbriu = setTimeout(function () {
+      if (!abriu) enviarPayload(montarPayload("whatsapp_nao_abriu", extra));
+    }, WA_JANELA_MS);
+
+    tFim = setTimeout(limpar, WA_JANELA_TARDIA_MS);
+  }
+
+  function tratarCliqueWhatsapp(rotulo) {
+    var agora = Date.now();
+    if (agora - waUltimoClique < WA_DUPLO_MS) return; // clique duplo: conta uma vez só
+    waUltimoClique = agora;
+
+    var extra = rotulo ? { rotulo: rotulo } : {};
+    enviarPayload(montarPayload("clique_whatsapp", extra));
+    vigiarAberturaWhatsapp(extra);
+  }
+
   function enviar(evento) {
+    if (evento === "clique_whatsapp") return tratarCliqueWhatsapp(null);
     enviarPayload(montarPayload(evento));
   }
 
   function enviarComRotulo(evento, rotulo) {
+    if (evento === "clique_whatsapp") return tratarCliqueWhatsapp(rotulo);
     enviarPayload(montarPayload(evento, { rotulo: rotulo }));
   }
 

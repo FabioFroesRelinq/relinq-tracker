@@ -5,6 +5,9 @@ function nomeAmigavelEvento(tipoEvento) {
   var mapa = {
     visita: "Visita",
     conversao: "Conversão",
+    clique_whatsapp: "Clique no WhatsApp",
+    whatsapp_aberto: "WhatsApp aberto",
+    whatsapp_nao_abriu: "WhatsApp não abriu",
   };
   if (mapa[tipoEvento]) return mapa[tipoEvento];
   return tipoEvento.replace(/_/g, " ");

@@ -426,6 +426,16 @@ td a:hover {
   padding-bottom: 18px;
 }
 
+.card-selo {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--primaria-texto);
+  background: var(--primaria-suave);
+}
+
 /* --- Variações (▲▼) --- */
 .delta {
   display: inline-flex;

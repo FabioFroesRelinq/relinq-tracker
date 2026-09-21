@@ -8,6 +8,7 @@ import { ResumoPainel } from "../components/Resumo";
 import AvisosCards from "../components/AvisosCards";
 import nomeFuso from "../components/nomeFuso";
 import { nomeEstado } from "../components/geo";
+import { metaDoEscopo, resumoDaMeta } from "../lib/perfil";
 import useAvisoCards, { tocarSom } from "../components/useAvisoCards";
 import estilos from "../styles/tv.module.css";
 
@@ -74,6 +75,11 @@ function kpisTV(s) {
       .filter(function (t) { return t.tipo_evento.indexOf("clique_") === 0; })
       .reduce(function (soma, t) { return soma + t.total; }, 0),
     conversoes: conversoes,
+    whatsappCliques: s.funil ? s.funil.comCliqueWhatsapp || 0 : 0,
+    whatsappVerificados: s.funil ? s.funil.whatsappVerificados || 0 : 0,
+    whatsappAbriram: s.funil ? s.funil.whatsappAbriram || 0 : 0,
+    taxaAbertura:
+      s.funil && s.funil.whatsappVerificados > 0 ? (s.funil.whatsappAbriram / s.funil.whatsappVerificados) * 100 : null,
     cards: total(s, "card_criado"),
     taxaCards: visitantes > 0 ? ((s.engajamento.visitantesComCard || 0) / visitantes) * 100 : 0,
     taxaConversao: visitas > 0 ? (conversoes / visitas) * 100 : 0,
@@ -351,6 +357,8 @@ export default function ModoTV() {
   }, [slides.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   var dados = chaveCache ? cache[chaveCache] : null;
+  // Meta da LP que está na tela (ou a meta em comum, em "Todas as LPs").
+  var metaTv = slide ? (slide.slug === "todas" ? metaDoEscopo(sites, null) : metaDoEscopo(sites, slide)) : null;
   var dadosAnt = chaveCache ? cacheAnt[chaveCache] : null;
 
   var visitantes = dados ? dados.engajamento.visitantesUnicos : 0;
@@ -543,6 +551,7 @@ export default function ModoTV() {
                 kAnt={dadosAnt ? kpisTV(dadosAnt) : null}
                 nomeLP={slide.nome}
                 todas={slide.slug === "todas"}
+                meta={metaTv}
               />
             </div>
           )}
@@ -558,7 +567,30 @@ export default function ModoTV() {
               <div className={estilos.grade}>
                 <CartaoKpi rotulo="Visitantes únicos" valor={fmtN(visitantes)} acento={slide.slug === "todas" ? "#6366f1" : corDaLP(slide)} serie={serie(dados, "visitantes")} />
                 <CartaoKpi rotulo="Cliques" valor={fmtN(cliques)} acento="#f59e0b" serie={serie(dados, "cliques")} />
-                {cards > 0 ? (
+                {metaTv && resumoDaMeta(metaTv, kpisTV(dados)) ? (
+                  (function () {
+                    var dm = resumoDaMeta(metaTv, kpisTV(dados));
+                    return (
+                      <>
+                        <CartaoKpi
+                          destaque="Meta"
+                          rotulo={dm.rotuloContagem}
+                          valor={dm.contagem === null ? "—" : fmtN(dm.contagem)}
+                          acento="#14b8a6"
+                          secundario={dm.medida ? null : "abertura ainda não medida"}
+                          serie={dm.medida ? serie(dados, dm.chaveSerie) : null}
+                        />
+                        <CartaoKpi
+                          destaque="Meta"
+                          rotulo={dm.rotuloTaxa}
+                          valor={dm.taxa === null ? "—" : fmtPct1(dm.taxa)}
+                          acento="#14b8a6"
+                          secundario={dm.notaTaxa}
+                        />
+                      </>
+                    );
+                  })()
+                ) : cards > 0 ? (
                   <>
                     <CartaoKpi rotulo="Cards criados" valor={fmtN(cards)} acento="#14b8a6" serie={serie(dados, "cards")} />
                     <CartaoKpi rotulo="Taxa de cards" valor={fmtPct1(taxaCards)} acento="#14b8a6" secundario="dos visitantes únicos" />

@@ -1,5 +1,6 @@
 import Icone from "./Icones";
 import { nomeEstado } from "./geo";
+import { resumoDaMeta } from "../lib/perfil";
 
 var nf = new Intl.NumberFormat("pt-BR");
 var nf1 = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -107,7 +108,7 @@ function horaDePico(stats) {
 }
 
 // Resumo do painel principal (uma LP ou todas).
-export function ResumoPainel({ stats, k, kAnt, nomeLP, todas }) {
+export function ResumoPainel({ stats, k, kAnt, nomeLP, todas, meta }) {
   if (!stats || !k) return null;
 
   var periodo = frasePeriodo(stats.periodo.inicio, stats.periodo.fim);
@@ -155,7 +156,51 @@ export function ResumoPainel({ stats, k, kAnt, nomeLP, todas }) {
       );
     });
   }
-  if (k.cards > 0) {
+  var dm = meta ? resumoDaMeta(meta, k) : null;
+  if (dm && meta === "card_criado") {
+    partes.push(function () {
+      return k.cards > 0 ? (
+        <>
+          <F>{fmtN(k.cards)} {k.cards === 1 ? "card foi criado" : "cards foram criados"}</F> ({fmtPct1(k.taxaCards)} dos visitantes)
+        </>
+      ) : (
+        <>
+          <F>nenhum card foi criado</F>
+        </>
+      );
+    });
+  } else if (dm && meta === "conversao") {
+    partes.push(function (primeiro) {
+      return k.conversoes > 0 ? (
+        <>
+          {primeiro ? "H" : "h"}ouve <F>{fmtN(k.conversoes)} {k.conversoes === 1 ? "conversão" : "conversões"}</F> ({fmtPct1(k.taxaConversao)} das visitas)
+        </>
+      ) : (
+        <>
+          <F>nenhuma conversão</F> foi registrada
+        </>
+      );
+    });
+  } else if (dm && meta === "whatsapp") {
+    partes.push(function () {
+      if (dm.medida) {
+        return (
+          <>
+            <F>{fmtN(dm.contagem)} {dm.contagem === 1 ? "visitante abriu" : "visitantes abriram"} o WhatsApp</F> ({fmtPct1(dm.taxa)} dos que clicaram)
+          </>
+        );
+      }
+      return k.whatsappCliques > 0 ? (
+        <>
+          <F>{fmtN(k.whatsappCliques)} {k.whatsappCliques === 1 ? "visitante clicou" : "visitantes clicaram"} no WhatsApp</F> (a abertura ainda não é medida nesta LP)
+        </>
+      ) : (
+        <>
+          <F>ninguém clicou</F> no WhatsApp
+        </>
+      );
+    });
+  } else if (k.cards > 0) {
     partes.push(function () {
       return (
         <>

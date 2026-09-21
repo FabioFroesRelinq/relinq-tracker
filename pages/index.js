@@ -13,6 +13,7 @@ import { PontoLP, corDaLP } from "../components/coresLP";
 import { ResumoPainel } from "../components/Resumo";
 import nomeFuso from "../components/nomeFuso";
 import { nomeEstado, nomeCidade } from "../components/geo";
+import { metaDoEscopo, resumoDaMeta } from "../lib/perfil";
 
 function ehClique(tipoEvento) {
   return tipoEvento.indexOf("clique_") === 0;
@@ -131,6 +132,11 @@ function kpisDe(s) {
     taxaConversao: visitas > 0 ? (conversoes / visitas) * 100 : 0,
     taxaRejeicao: s.engajamento.taxaRejeicao,
     tempo: s.engajamento.tempoMedioSegundos,
+    whatsappCliques: s.funil ? s.funil.comCliqueWhatsapp || 0 : 0,
+    whatsappVerificados: s.funil ? s.funil.whatsappVerificados || 0 : 0,
+    whatsappAbriram: s.funil ? s.funil.whatsappAbriram || 0 : 0,
+    taxaAbertura:
+      s.funil && s.funil.whatsappVerificados > 0 ? (s.funil.whatsappAbriram / s.funil.whatsappVerificados) * 100 : null,
   };
 }
 
@@ -342,7 +348,11 @@ export default function Dashboard() {
         })[0] || null
       : null;
   const corPrincipal = siteAtual ? corDaLP(siteAtual) : "#6366f1";
+  // Meta da LP escolhida (ou a meta em comum, em "todas as LPs"). Sem meta: modo automático.
+  const metaKey = metaDoEscopo(sites, siteAtual);
+  const dm = metaKey && k ? resumoDaMeta(metaKey, k) : null;
   const kAnt = kpisDe(statsAnterior);
+  const dmAnt = metaKey && kAnt ? resumoDaMeta(metaKey, kAnt) : null;
 
   const origemAgrupada = stats ? agruparPorChave(stats.porOrigem, "utm_source") : {};
   const campanhaAgrupada = stats ? agruparPorChave(stats.porCampanha, "utm_campaign") : {};
@@ -483,6 +493,7 @@ export default function Dashboard() {
                 kAnt={kAnt}
                 nomeLP={siteAtual ? siteAtual.nome : "a LP"}
                 todas={!siteAtual}
+                meta={metaKey}
               />
 
               <div className="cards">
@@ -493,6 +504,45 @@ export default function Dashboard() {
                   serie={serieDe(stats, "visitantes")}
                   rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.visitantes} anterior={kAnt.visitantes} formatar={fmtN} />}
                 />
+                {dm && (
+                  <CartaoKpi
+                    destaque="Meta"
+                    rotulo={dm.rotuloContagem}
+                    valor={dm.contagem === null ? "—" : fmtN(dm.contagem)}
+                    acento="#14b8a6"
+                    secundario={dm.medida ? null : "abertura ainda não medida"}
+                    serie={dm.medida ? serieDe(stats, dm.chaveSerie) : null}
+                    rodape={
+                      kAnt && dmAnt && dm.medida && (
+                        <RodapeDelta rotulo={rotuloAntes} atual={dm.contagem} anterior={dmAnt.contagem} formatar={fmtN} />
+                      )
+                    }
+                  />
+                )}
+                {dm && (
+                  <CartaoKpi
+                    destaque="Meta"
+                    rotulo={dm.rotuloTaxa}
+                    valor={dm.taxa === null ? "—" : fmtPct1(dm.taxa)}
+                    acento="#14b8a6"
+                    secundario={dm.notaTaxa}
+                    rodape={
+                      kAnt && dmAnt && dm.medida && dm.taxa !== null && dmAnt.taxa !== null && (
+                        <RodapePP rotulo={rotuloAntes} atual={dm.taxa} anterior={dmAnt.taxa} />
+                      )
+                    }
+                  />
+                )}
+                {metaKey === "whatsapp" && (
+                  <CartaoKpi
+                    rotulo="Clicaram no WhatsApp"
+                    valor={fmtN(k.whatsappCliques)}
+                    acento="#06b6d4"
+                    secundario="visitantes únicos (clique duplo conta uma vez)"
+                    serie={serieDe(stats, "whatsappCliques")}
+                    rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.whatsappCliques} anterior={kAnt.whatsappCliques} formatar={fmtN} />}
+                  />
+                )}
                 <CartaoKpi
                   rotulo="Cliques (todos os tipos)"
                   valor={fmtN(k.cliques)}
@@ -500,13 +550,15 @@ export default function Dashboard() {
                   serie={serieDe(stats, "cliques")}
                   rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.cliques} anterior={kAnt.cliques} formatar={fmtN} />}
                 />
-                <CartaoKpi
-                  rotulo="Conversões"
-                  valor={fmtN(k.conversoes)}
-                  acento="#22c55e"
-                  serie={serieDe(stats, "conversoes")}
-                  rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.conversoes} anterior={kAnt.conversoes} formatar={fmtN} />}
-                />
+                {metaKey !== "conversao" && (
+                  <CartaoKpi
+                    rotulo="Conversões"
+                    valor={fmtN(k.conversoes)}
+                    acento="#22c55e"
+                    serie={serieDe(stats, "conversoes")}
+                    rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.conversoes} anterior={kAnt.conversoes} formatar={fmtN} />}
+                  />
+                )}
                 {k.quizzes > 0 && (
                   <CartaoKpi
                     rotulo="Quizzes finalizados"
@@ -525,7 +577,7 @@ export default function Dashboard() {
                     rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.leads} anterior={kAnt.leads} formatar={fmtN} />}
                   />
                 )}
-                {k.cards > 0 && (
+                {metaKey !== "card_criado" && k.cards > 0 && (
                   <CartaoKpi
                     rotulo="Cards criados"
                     valor={fmtN(k.cards)}
@@ -534,7 +586,7 @@ export default function Dashboard() {
                     rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.cards} anterior={kAnt.cards} formatar={fmtN} />}
                   />
                 )}
-                {k.cards > 0 && (
+                {metaKey !== "card_criado" && k.cards > 0 && (
                   <CartaoKpi
                     rotulo="Taxa de cards"
                     valor={fmtPct1(k.taxaCards)}
@@ -543,12 +595,14 @@ export default function Dashboard() {
                     rodape={kAnt && <RodapePP rotulo={rotuloAntes} atual={k.taxaCards} anterior={kAnt.taxaCards} />}
                   />
                 )}
-                <CartaoKpi
-                  rotulo="Taxa de conversão"
-                  valor={fmtPct1(k.taxaConversao)}
-                  acento="#22c55e"
-                  rodape={kAnt && <RodapePP rotulo={rotuloAntes} atual={k.taxaConversao} anterior={kAnt.taxaConversao} />}
-                />
+                {metaKey !== "conversao" && (
+                  <CartaoKpi
+                    rotulo="Taxa de conversão"
+                    valor={fmtPct1(k.taxaConversao)}
+                    acento="#22c55e"
+                    rodape={kAnt && <RodapePP rotulo={rotuloAntes} atual={k.taxaConversao} anterior={kAnt.taxaConversao} />}
+                  />
+                )}
                 <CartaoKpi
                   rotulo="Taxa de rejeição"
                   valor={fmtPct1(k.taxaRejeicao)}
@@ -564,7 +618,7 @@ export default function Dashboard() {
               </div>
 
               <Secao id="funil" titulo="Funil de visitantes" aberta={!secoesFechadas.funil} aoAlternar={alternarSecao}>
-                <Funil funil={stats.funil} />
+                <Funil funil={stats.funil} meta={metaKey} />
               </Secao>
 
               <Secao id="painel-visual" titulo="Painel de gráficos" aberta={!secoesFechadas["painel-visual"]} aoAlternar={alternarSecao}>
@@ -1643,24 +1697,53 @@ function TabelaAgrupada({ dados, detalhamento }) {
 }
 
 // --- Funil: visitantes únicos que chegaram em cada etapa ---
-function Funil({ funil }) {
+function Funil({ funil, meta }) {
   if (!funil || !funil.visitantes) {
     return <p className="vazio">Sem visitantes nesse período.</p>;
   }
 
-  var etapas = [
-    { nome: "Visitaram a página", n: funil.visitantes, cor: "#6366f1" },
-    { nome: "Clicaram em algum botão", n: funil.comClique, cor: "#06b6d4" },
-  ];
-  if (funil.comCard > 0) etapas.push({ nome: "Criaram um card", n: funil.comCard, cor: "#14b8a6" });
-  if (funil.comConversao > 0) etapas.push({ nome: "Converteram", n: funil.comConversao, cor: "#22c55e" });
+  var etapas;
+  var nota = null;
+  if (meta === "whatsapp") {
+    // Visitou -> clicou no WhatsApp -> WhatsApp abriu de verdade
+    etapas = [
+      { nome: "Visitaram a página", n: funil.visitantes, cor: "#6366f1" },
+      { nome: "Clicaram no WhatsApp", n: funil.comCliqueWhatsapp || 0, cor: "#06b6d4" },
+    ];
+    if (funil.whatsappVerificados > 0) {
+      // A % desta etapa é sobre quem teve a abertura MEDIDA (não sobre todos que clicaram).
+      etapas.push({
+        nome: "Abriram o WhatsApp",
+        n: funil.whatsappAbriram || 0,
+        cor: "#22c55e",
+        passoFixo: (funil.whatsappAbriram / funil.whatsappVerificados) * 100,
+        textoPasso: "dos que tiveram a abertura medida",
+      });
+      if (funil.whatsappVerificados < (funil.comCliqueWhatsapp || 0)) {
+        nota =
+          "A abertura foi medida em " + fmtN(funil.whatsappVerificados) + " dos " + fmtN(funil.comCliqueWhatsapp) +
+          " visitantes que clicaram; os demais clicaram antes de a LP passar a usar a versão nova do tracker.js.";
+      }
+    } else if ((funil.comCliqueWhatsapp || 0) > 0) {
+      nota = "A abertura do WhatsApp ainda não foi medida: a LP precisa carregar o tracker.js atualizado.";
+    }
+  } else {
+    etapas = [
+      { nome: "Visitaram a página", n: funil.visitantes, cor: "#6366f1" },
+      { nome: "Clicaram em algum botão", n: funil.comClique, cor: "#06b6d4" },
+    ];
+    // Com meta, a etapa da meta aparece sempre (mesmo zerada); sem meta, só quando existe.
+    if (meta === "card_criado" || funil.comCard > 0) etapas.push({ nome: "Criaram um card", n: funil.comCard, cor: "#14b8a6" });
+    if (meta === "conversao" || funil.comConversao > 0) etapas.push({ nome: "Converteram", n: funil.comConversao, cor: "#22c55e" });
+  }
 
   return (
+    <div>
     <div className="funil">
       {etapas.map(function (e, i) {
         var pctTotal = Math.min(100, (e.n / funil.visitantes) * 100);
         var anterior = i > 0 ? etapas[i - 1].n : null;
-        var passo = anterior && e.n <= anterior ? (e.n / anterior) * 100 : null;
+        var passo = e.passoFixo != null ? e.passoFixo : anterior && e.n <= anterior ? (e.n / anterior) * 100 : null;
         return (
           <div className="funil-etapa" key={e.nome}>
             <span className="funil-nome">{e.nome}</span>
@@ -1670,11 +1753,17 @@ function Funil({ funil }) {
             <div className="funil-numeros">
               <span className="funil-valor">{fmtN(e.n)}</span>
               <span className="funil-info">{fmtPct1(pctTotal)} dos visitantes</span>
-              {passo != null && <span className="funil-info">{fmtPct1(passo)} da etapa anterior</span>}
+              {passo != null && <span className="funil-info">{fmtPct1(passo)} {e.textoPasso || "da etapa anterior"}</span>}
             </div>
           </div>
         );
       })}
+    </div>
+    {nota && (
+      <p className="valor-secundario" style={{ marginTop: 14 }}>
+        {nota}
+      </p>
+    )}
     </div>
   );
 }
