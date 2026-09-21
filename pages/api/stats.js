@@ -163,6 +163,16 @@ export default async function handler(req, res) {
       filtroData
     );
 
+    // --- Visitantes que criaram card (formulário da LP de evento) ---
+    // O evento "card_criado" é disparado pelo tracker.js quando a caixa de
+    // sucesso do formulário aparece (depois que o card foi criado).
+    const [[{ visitantesComCard }]] = await pool.query(
+      `SELECT COUNT(DISTINCT visitor_id) AS visitantesComCard
+       FROM events
+       WHERE ${condSite}criado_em BETWEEN ? AND ? AND tipo_evento = 'card_criado' AND visitor_id IS NOT NULL`,
+      filtroData
+    );
+
     // --- Dispositivo (mobile/tablet/desktop) ---
     const [porDispositivo] = await pool.query(
       `SELECT COALESCE(dispositivo, 'desconhecido') AS dispositivo, COUNT(*) AS total
@@ -258,6 +268,7 @@ export default async function handler(req, res) {
       cliquesPorRotulo,
       engajamento: {
         visitantesUnicos: Number(visitantesUnicos),
+        visitantesComCard: Number(visitantesComCard),
         taxaRejeicao,
         tempoMedioSegundos: tempoMedioSegundos ? Math.round(tempoMedioSegundos) : null,
         porDispositivo,

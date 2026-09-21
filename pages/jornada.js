@@ -93,6 +93,7 @@ export default function Jornada() {
         <div className="nav">
           <Link href="/">← Painel por LP</Link>
           <Link href="/visao-geral">Visão geral</Link>
+          <Link href="/relatorios">Relatórios</Link>
           <button className="btn-sair" onClick={sair}>Sair</button>
         </div>
       </div>

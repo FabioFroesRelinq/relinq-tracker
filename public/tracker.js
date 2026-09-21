@@ -593,6 +593,92 @@
     });
   }
 
+  // --- Mensagem de sucesso de formulário -> evento (sem mexer no código da LP) ---
+  // Muitos formulários (ex: o da LP do evento) escondem o form e mostram
+  // uma caixa de "sucesso" só DEPOIS que o servidor confirmou o envio. Esse
+  // momento é exatamente quando o card/lead foi criado, então o tracker
+  // observa essa caixa e dispara o evento quando ela passa de escondida pra
+  // visível — a LP não precisa chamar relinqTrack().
+  //
+  // Vale para qualquer elemento que comece escondido (atributo "hidden",
+  // display:none ou uma classe) e apareça no sucesso. Dispara no máximo uma
+  // vez por carregamento de página, e só na transição escondida -> visível
+  // (uma caixa que já estava visível ao abrir a página não dispara nada).
+  //
+  // Fontes de configuração:
+  //  1) SUCESSOS_CONHECIDOS (abaixo) — LPs já mapeadas, ativas sem nenhum
+  //     atributo extra no <script>. Se a página não tiver o elemento, nada
+  //     acontece.
+  //  2) Atributos no próprio <script> de instalação, pra LPs novas:
+  //       <script src=".../tracker.js" data-site="slug"
+  //               data-sucesso="#minha-caixa-de-sucesso"
+  //               data-sucesso-evento="lead_capturado"></script>
+  //     (data-sucesso-evento é opcional; o padrão é "card_criado".)
+  var SUCESSOS_CONHECIDOS = [
+    { seletor: "#reg-success", evento: "card_criado" }, // LP do evento (Relinq Beauty)
+  ];
+
+  function observarSucesso(seletor, nomeEvento) {
+    var jaDisparou = false;
+    var visivelAntes = null;
+
+    function visivel(el) {
+      // Considera "hidden", display:none e ancestrais escondidos.
+      return el.getClientRects().length > 0;
+    }
+
+    function checar(el) {
+      var agora = visivel(el);
+      if (visivelAntes === false && agora && !jaDisparou) {
+        jaDisparou = true;
+        enviar(nomeEvento);
+      }
+      visivelAntes = agora;
+    }
+
+    function ligar(el) {
+      visivelAntes = visivel(el);
+      if (typeof MutationObserver === "undefined") return;
+      var obs = new MutationObserver(function () {
+        checar(el);
+      });
+      // Observa o elemento e seus ancestrais (só atributos, sem subtree) pra
+      // pegar tanto "hidden" no próprio elemento quanto num container.
+      for (var no = el; no && no !== document.documentElement; no = no.parentElement) {
+        obs.observe(no, { attributes: true, attributeFilter: ["hidden", "style", "class"] });
+      }
+    }
+
+    function procurar() {
+      var el = document.querySelector(seletor);
+      if (el) ligar(el);
+    }
+
+    try {
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", procurar);
+      } else {
+        procurar();
+      }
+    } catch (e) {
+      // seletor inválido ou erro de DOM: falha silenciosa, tracking nunca quebra a LP
+    }
+  }
+
+  (function iniciarSucessos() {
+    var lista = SUCESSOS_CONHECIDOS.slice();
+    var seletorAttr = scriptTag ? scriptTag.getAttribute("data-sucesso") : null;
+    if (seletorAttr) {
+      lista.push({
+        seletor: seletorAttr,
+        evento: scriptTag.getAttribute("data-sucesso-evento") || "card_criado",
+      });
+    }
+    lista.forEach(function (item) {
+      observarSucesso(item.seletor, item.evento);
+    });
+  })();
+
   // Expõe funções globais pra disparar eventos manuais no HTML da LP
   window.relinqTrack = enviar;
   window.relinqTrackVideo = relinqTrackVideo;

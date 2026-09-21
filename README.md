@@ -181,6 +181,67 @@ checkouts prontos) — dois recursos cobrem o funil sem precisar de código:
 
 ---
 
+## Integração com o GTM server-side (Relinq Sales)
+
+Além do `tracker.js` do navegador, o `pages/api/track.js` também aceita
+eventos vindos do **container GTM server-side** da empresa (o
+"[SERVER] Relinq..."), através de uma tag "Solicitação HTTP" vinculada ao
+trigger **"Todos os Eventos - GA4"** já existente lá. Isso roda em
+paralelo ao envio pra Meta, sem interferir nele — a tag nova não tem
+nenhum "fire before/after" com a tag da Meta, então mesmo que o endpoint
+falhe, o envio pra Meta continua normal.
+
+**Por enquanto, só a Relinq Sales usa essa integração.**
+
+### 1. Variáveis de ambiente (ver `.env.example`)
+
+- `GTM_SERVER_SECRET` — segredo compartilhado com a tag do GTM. Gere com
+  `openssl rand -hex 32`. Sem essa variável configurada, o endpoint
+  recusa qualquer requisição que se diga vinda do GTM.
+- `GTM_SITES_PERMITIDOS` — slugs de site aceitos (ex: `relinq-sales`).
+- `GTM_EVENTOS_PERMITIDOS` — nomes de evento aceitos (ex:
+  `lead,generate_lead,purchase`). Como o trigger manda **todo** evento
+  GA4, é essa lista que decide o que de fato vira registro no banco;
+  ajustar o que entra no tracker é só editar essa variável, sem tocar no
+  GTM.
+
+### 2. Configuração da tag no GTM (container server)
+
+Na tag "Solicitação HTTP" vinculada ao trigger "Todos os Eventos - GA4":
+
+- **Método:** POST
+- **URL:** `https://SEU-DOMINIO/api/track`
+- **Header:** `x-gtm-secret: <mesmo valor de GTM_SERVER_SECRET>`
+- **Corpo (JSON)**, montado com as variáveis já disponíveis nesse
+  trigger:
+  ```json
+  {
+    "site": "relinq-sales",
+    "evento": "{{Nome do Evento}}",
+    "pagina": "{{Page Location}}",
+    "visitor_id": "{{Client ID}}",
+    "utm_source": "{{utm_source}}",
+    "utm_medium": "{{utm_medium}}",
+    "utm_campaign": "{{utm_campaign}}",
+    "utm_content": "{{utm_content}}",
+    "utm_term": "{{utm_term}}"
+  }
+  ```
+  (`site` fica fixo em `"relinq-sales"` direto na tag — não precisa vir
+  de variável, já que essa tag é dedicada a essa LP/quiz.)
+
+### 3. Testando
+
+1. Publique a tag em modo **Preview** do GTM antes de publicar de
+   verdade, e confirme no debug que ela dispara com status `201`
+   (evento aceito) ou `204` (evento fora da allowlist — normal, não é
+   erro) — nunca `401`/`403` (secret errado) nem `404`/`500`.
+2. Confirme, no mesmo Preview, que a tag da Meta continua disparando
+   normalmente, sem nenhuma mudança de comportamento.
+3. Só então publique a versão do container.
+
+---
+
 ## Usando o painel
 
 - **Seletor de LP** (topo): escolhe uma LP específica, ou **"📊 Todas as
@@ -198,6 +259,23 @@ checkouts prontos) — dois recursos cobrem o funil sem precisar de código:
   "Detalhamento por botão" pelo nome do evento ou do rótulo.
 - **`/visao-geral`**: compara todas as LPs cadastradas lado a lado, uma
   linha por LP.
+- **`/relatorios`**: relatório de engajamento (dispositivo, profundidade de
+  rolagem e tempo médio na página). Filtra por uma ou várias LPs e por
+  período, compara com o período anterior (variação % nos cards e linha
+  tracejada nos gráficos), compara LPs lado a lado e exporta a tabela
+  resumo em CSV. O tempo médio limita cada medição a 30 min
+  (`TEMPO_MAXIMO_SEGUNDOS` em `pages/api/relatorios.js`) pra uma aba
+  esquecida aberta não distorcer a média.
+- **Cards criados (formulário da LP de evento)**: o próprio `tracker.js`
+  observa a caixa de sucesso do formulário (`#reg-success`) e dispara
+  `card_criado` quando ela aparece, ou seja, depois que o card foi criado
+  (sem alterar o código da LP; basta ter o `<script>` do tracker instalado).
+  Para outras LPs, use `data-sucesso="#seletor"` (e, opcionalmente,
+  `data-sucesso-evento="nome"`) no `<script>` de instalação.
+  Quando existe ao menos um evento `card_criado` no período, o painel e o
+  `/relatorios` mostram "Cards criados" e "Taxa de cards" (visitantes
+  únicos que criaram card ÷ visitantes únicos); no relatório entram também
+  na comparação entre LPs, no gráfico diário e no CSV.
 
 ---
 
@@ -213,7 +291,7 @@ relinq-tracker/
   lib/auth-edge.js         -> mesma verificação de sessão, versão Edge Runtime (middleware)
   middleware.js             -> protege o painel e as APIs internas, exige login
   components/Relogio.js      -> relógio ao vivo no cabeçalho do painel
-  pages/api/track.js          -> recebe os eventos do tracker.js (pública, sem login)
+  pages/api/track.js          -> recebe eventos do tracker.js e (autenticado) do GTM server-side (pública, sem login)
   pages/api/sites.js            -> cadastra/lista as LPs (protegida)
   pages/api/stats.js              -> calcula as métricas do painel (protegida)
   pages/api/login.js                -> confere usuário/senha, grava cookie de sessão
@@ -222,6 +300,9 @@ relinq-tracker/
   pages/index.js                          -> painel principal (visitas, cliques, conversões, UTMs, vídeo)
   pages/sites.js                            -> tela de cadastro de LPs
   pages/visao-geral.js                        -> comparativo entre todas as LPs
+  pages/relatorios.js                           -> relatório de dispositivo, rolagem e tempo (com comparação e CSV)
+  pages/api/relatorios.js                         -> métricas do relatório (protegida)
+  styles/relatorios.module.css                      -> estilos exclusivos da página de relatórios
   public/tracker.js                             -> snippet único a ser instalado em qualquer LP
 ```
 

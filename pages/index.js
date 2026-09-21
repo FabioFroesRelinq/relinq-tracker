@@ -204,6 +204,11 @@ export default function Dashboard() {
   const conversoes = stats ? somarPorTipo(stats.totaisPorTipo, "conversao") : 0;
   const quizzesFinalizados = stats ? somarPorTipo(stats.totaisPorTipo, "quiz_finalizado") : 0;
   const leadsCapturados = stats ? somarPorTipo(stats.totaisPorTipo, "lead_capturado") : 0;
+  const cardsCriados = stats ? somarPorTipo(stats.totaisPorTipo, "card_criado") : 0;
+  const taxaCards =
+    stats && stats.engajamento.visitantesUnicos > 0
+      ? (((stats.engajamento.visitantesComCard || 0) / stats.engajamento.visitantesUnicos) * 100).toFixed(1)
+      : "0.0";
   const eventosGtm = stats
     ? stats.totaisPorTipo.filter(function (t) {
         return t.tipo_evento.indexOf("gtm_") === 0;
@@ -282,6 +287,7 @@ export default function Dashboard() {
         </div>
         <div className="nav">
           <Link href="/visao-geral">Visão geral</Link>
+          <Link href="/relatorios">Relatórios</Link>
           <Link href="/jornada">Jornada do visitante</Link>
           <Link href="/sites">+ Cadastrar LP</Link>
           <button
@@ -378,6 +384,19 @@ export default function Dashboard() {
                   <div className="card" style={{ "--acento": "#fb923c" }}>
                     <div className="label">Leads capturados</div>
                     <div className="valor">{leadsCapturados}</div>
+                  </div>
+                )}
+                {cardsCriados > 0 && (
+                  <div className="card" style={{ "--acento": "#14b8a6" }}>
+                    <div className="label">Cards criados</div>
+                    <div className="valor">{cardsCriados}</div>
+                  </div>
+                )}
+                {cardsCriados > 0 && (
+                  <div className="card" style={{ "--acento": "#14b8a6" }}>
+                    <div className="label">Taxa de cards</div>
+                    <div className="valor">{taxaCards}%</div>
+                    <div className="valor-secundario">dos visitantes únicos</div>
                   </div>
                 )}
                 <div className="card" style={{ "--acento": "#22c55e" }}>

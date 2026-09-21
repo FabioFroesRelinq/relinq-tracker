@@ -39,5 +39,8 @@ export const config = {
     "/api/visao-geral/:path*",
     "/api/jornada",
     "/api/jornada/:path*",
+    "/relatorios",
+    "/api/relatorios",
+    "/api/relatorios/:path*",
   ],
 };

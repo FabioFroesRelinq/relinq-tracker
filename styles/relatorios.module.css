@@ -1,0 +1,222 @@
+/* Estilos exclusivos da página /relatorios.
+   Reaproveita as classes globais (container, header, secao, cards, filtros, etc.)
+   e só define aqui o que é novo. */
+
+/* --- Seletor de LPs --- */
+.blocoSites {
+  margin-bottom: 16px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.chip {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid #263042;
+  background: #131b2c;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.chip:hover {
+  border-color: #6366f1;
+  color: #fff;
+}
+
+.chipAtivo {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #fff;
+}
+
+.chip:focus-visible,
+.toggle input:focus-visible {
+  outline: 2px solid #818cf8;
+  outline-offset: 2px;
+}
+
+/* --- Linha de ações (comparar / exportar) --- */
+.acoes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #cbd5e1;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: #6366f1;
+  cursor: pointer;
+}
+
+/* --- Variações (delta) --- */
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.deltaSobe {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.deltaDesce {
+  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.12);
+}
+
+.deltaNeutro {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.cartaoRodape {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.base {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+/* --- Gráfico SVG --- */
+.grafico {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.tracoAnterior {
+  display: inline-block;
+  width: 18px;
+  border-top: 2px dashed #94a3b8;
+}
+
+.nota {
+  margin: 14px 0 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+/* --- Barras comparativas (dispositivo e rolagem) --- */
+.barras {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.barraLinha {
+  display: grid;
+  grid-template-columns: minmax(150px, 240px) 1fr minmax(170px, 230px);
+  gap: 14px;
+  align-items: center;
+}
+
+.barraRotulo {
+  color: #cbd5e1;
+  font-size: 0.92rem;
+}
+
+.trilha {
+  position: relative;
+  height: 16px;
+  background: #0d1424;
+  border-radius: 6px;
+}
+
+.preenchimento {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.marca {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: #e2e8f0;
+  border-radius: 1px;
+}
+
+.barraValor {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-weight: 700;
+  color: #fff;
+  font-size: 0.92rem;
+}
+
+.sub {
+  color: #64748b;
+  font-weight: 400;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 700px) {
+  .barraLinha {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .barraValor {
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preenchimento,
+  .chip {
+    transition: none;
+  }
+}
+
+/* --- Tabela de comparação entre LPs --- */
+.tabelaRolagem {
+  overflow-x: auto;
+}
+
+.numero {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.linhaTotal td {
+  font-weight: 700;
+  border-top: 1px solid #263042;
+  background: rgba(99, 102, 241, 0.06);
+}
