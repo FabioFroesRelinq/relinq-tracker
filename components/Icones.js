@@ -84,6 +84,25 @@ const CAMINHOS = {
   play: <path d="M7 4l13 8-13 8z" />,
   pausa: <path d="M8 5v14M16 5v14" />,
   tela: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
+  sino: (
+    <>
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+    </>
+  ),
+  som: (
+    <>
+      <path d="M11 5L6 9H2v6h4l5 4V5z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M19 5a9 9 0 0 1 0 14" />
+    </>
+  ),
+  somMudo: (
+    <>
+      <path d="M11 5L6 9H2v6h4l5 4V5z" />
+      <path d="M23 9l-6 6M17 9l6 6" />
+    </>
+  ),
   pulso: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
   check: <path d="M20 6L9 17l-5-5" />,
   copiar: (

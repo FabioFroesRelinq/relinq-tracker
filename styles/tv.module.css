@@ -1,7 +1,8 @@
 /* Modo TV: números grandes, uma LP por vez. */
 
 .tv {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 2.2vh;
@@ -71,8 +72,8 @@
 
 /* Reaproveita o CartaoKpi, só que em escala de TV */
 .grade :global(.card) {
-  min-height: 24vh;
-  padding: 2.4vh 1.6vw 0;
+  min-height: 19vh;
+  padding: 2.2vh 1.6vw 0;
   border-radius: 20px;
 }
 
@@ -90,7 +91,7 @@
 }
 
 .grade :global(.card-spark) {
-  height: 7vh;
+  height: 6vh;
 }
 
 .baixo {
@@ -109,7 +110,8 @@
   display: flex;
   flex-direction: column;
   gap: 1.6vh;
-  min-height: 24vh;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .painel h2 {
@@ -121,7 +123,7 @@
 
 .grafico {
   flex: 1;
-  min-height: 12vh;
+  min-height: 8vh;
   display: flex;
 }
 
@@ -129,7 +131,7 @@
   margin: 0;
   width: 100%;
   height: 100%;
-  min-height: 12vh;
+  min-height: 8vh;
   color: var(--primaria);
 }
 
@@ -191,6 +193,48 @@
   margin: auto;
   text-align: center;
   color: var(--texto-forte);
+}
+
+/* Faixa com os últimos cards do dia */
+.ultimos {
+  display: flex;
+  align-items: center;
+  gap: 1.4vw;
+  padding: 1.2vh 1.6vw;
+  border-radius: 16px;
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  font-size: clamp(0.85rem, 1.1vw, 1.3rem);
+  overflow: hidden;
+}
+
+.ultimosTitulo {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--texto-suave);
+}
+
+.ultimos ul {
+  display: flex;
+  gap: 1.8vw;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.ultimos li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  color: var(--texto-forte);
+  font-weight: 600;
+}
+
+.ultimosMudo {
+  color: var(--texto-mudo);
+  font-weight: 400;
 }
 
 /* Barra de progresso até a próxima LP */

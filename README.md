@@ -267,6 +267,16 @@ Na tag "Solicitação HTTP" vinculada ao trigger "Todos os Eventos - GA4":
   resumo em CSV. O tempo médio limita cada medição a 30 min
   (`TEMPO_MAXIMO_SEGUNDOS` em `pages/api/relatorios.js`) pra uma aba
   esquecida aberta não distorcer a média.
+- **Avisos de "Novo card criado"**: em qualquer página do painel aparece um
+  popup (LP, origem e campanha, sem dado pessoal) quando um card é criado. O
+  painel consulta `/api/cards-novos` a cada 15s; ao abrir, só marca o ponto de
+  partida, então nunca avisa cards antigos. O sino no menu lateral liga/desliga
+  o aviso, o som e a **notificação do sistema** (aparece com a aba em segundo
+  plano; o navegador pede permissão uma vez). Limites: só funciona com o painel
+  aberto em alguma aba (com o navegador fechado seria preciso Web Push), abas
+  ocultas podem atrasar até ~1 min, e o som só toca depois de você interagir
+  com a página. No modo TV o aviso é grande e há uma faixa com os últimos cards
+  do dia; o botão de alto-falante liga o som.
 - **`/saude` (saúde do tracking)**: um cartão por LP com semáforo (verde: evento
   na última hora; âmbar: entre 1 h e 24 h; vermelho: mais de 24 h sem eventos),
   último evento e última visita, eventos por hora nas últimas 24 h, o que
@@ -325,6 +335,10 @@ relinq-tracker/
   middleware.js             -> protege o painel e as APIs internas, exige login
   components/Relogio.js      -> relógio ao vivo no cabeçalho do painel
   components/Resumo.js         -> resumo em linguagem natural (painel e relatórios)
+  components/useAvisoCards.js   -> consulta cards novos, popup, som e notificação do sistema
+  components/AvisosCards.js      -> popup "Novo card criado"
+  components/MenuAvisos.js        -> sino do menu lateral (preferências dos avisos)
+  pages/api/cards-novos.js         -> cards criados desde um id (protegida)
   components/coresLP.js         -> cores das LPs e bolinha colorida
   components/SeletorCor.js       -> escolha de cor no cadastro de LPs
   pages/saude.js                  -> saúde do tracking por LP

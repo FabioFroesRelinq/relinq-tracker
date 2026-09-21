@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import Icone from "./Icones";
+import AvisosCards from "./AvisosCards";
+import MenuAvisos from "./MenuAvisos";
+import useAvisoCards from "./useAvisoCards";
 import estilos from "../styles/shell.module.css";
 
 const LOGO =
@@ -23,6 +26,7 @@ export default function Shell({ titulo, subtitulo, acoes, children }) {
   const router = useRouter();
   const [gavetaAberta, setGavetaAberta] = useState(false);
   const [tema, setTema] = useState("escuro");
+  const avisosCard = useAvisoCards();
 
   useEffect(function () {
     setTema(document.documentElement.getAttribute("data-tema") === "claro" ? "claro" : "escuro");
@@ -62,6 +66,8 @@ export default function Shell({ titulo, subtitulo, acoes, children }) {
 
   return (
     <div className={estilos.app}>
+      <AvisosCards avisos={avisosCard.avisos} aoFechar={avisosCard.dispensar} />
+
       <header className={estilos.topoMobile}>
         <button
           type="button"
@@ -127,6 +133,13 @@ export default function Shell({ titulo, subtitulo, acoes, children }) {
         </nav>
 
         <div className={estilos.rodape}>
+          <MenuAvisos
+            prefs={avisosCard.prefs}
+            atualizarPrefs={avisosCard.atualizarPrefs}
+            permissao={avisosCard.permissao}
+            pedirPermissao={avisosCard.pedirPermissao}
+            classeItem={estilos.item}
+          />
           <button type="button" className={estilos.item} onClick={alternarTema}>
             <Icone nome={tema === "claro" ? "lua" : "sol"} />
             {tema === "claro" ? "Tema escuro" : "Tema claro"}

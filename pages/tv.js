@@ -5,6 +5,8 @@ import Icone from "../components/Icones";
 import CartaoKpi, { Sparkline } from "../components/CartaoKpi";
 import { PontoLP, corDaLP } from "../components/coresLP";
 import { ResumoPainel } from "../components/Resumo";
+import AvisosCards from "../components/AvisosCards";
+import useAvisoCards, { tocarSom } from "../components/useAvisoCards";
 import estilos from "../styles/tv.module.css";
 
 var PERIODOS = [
@@ -83,6 +85,12 @@ function periodoAnterior(inicio, fim) {
   return { inicio: somarDiasStr(novoFim, -(dias - 1)), fim: novoFim };
 }
 
+function haQuanto(min) {
+  if (min < 1) return "agora";
+  if (min < 60) return "há " + min + " min";
+  return "há " + Math.floor(min / 60) + " h";
+}
+
 function nomeClique(tipo) {
   var resto = tipo.replace("clique_", "").replace(/_/g, " ");
   return resto.charAt(0).toUpperCase() + resto.slice(1);
@@ -91,6 +99,8 @@ function nomeClique(tipo) {
 // Modo TV: um painel de números grandes que alterna sozinho entre as LPs.
 export default function ModoTV() {
   const [sites, setSites] = useState([]);
+  // Avisos de "Novo card criado" + faixa com os últimos cards de hoje
+  const avisosTv = useAvisoCards({ comRecentes: true });
   const [indice, setIndice] = useState(0);
   const [periodo, setPeriodo] = useState("7d");
   const [intervalo, setIntervalo] = useState(20);
@@ -377,6 +387,8 @@ export default function ModoTV() {
 
   return (
     <div className={estilos.tv} onMouseMove={mostrarControles}>
+      <AvisosCards avisos={avisosTv.avisos} aoFechar={avisosTv.dispensar} grande />
+
       <div className={estilos.controles + (controlesVisiveis || menuAberto ? " " + estilos.controlesVisiveis : "")}>
         <div className={estilos.grupo} role="group" aria-label="Período">
           {PERIODOS.map(function (p) {
@@ -462,6 +474,19 @@ export default function ModoTV() {
         </button>
         <button className={estilos.botao} onClick={function () { avancar(1); }} aria-label="Próxima LP">
           <Icone nome="chevron" tamanho={20} className={estilos.giraDir} />
+        </button>
+        <button
+          className={estilos.botao}
+          aria-pressed={avisosTv.prefs.som}
+          aria-label={avisosTv.prefs.som ? "Desligar o som dos avisos" : "Ligar o som dos avisos"}
+          title={avisosTv.prefs.som ? "Som dos avisos ligado" : "Som dos avisos desligado"}
+          onClick={function () {
+            var ligar = !avisosTv.prefs.som;
+            avisosTv.atualizarPrefs({ som: ligar });
+            if (ligar) tocarSom(); // o clique libera o áudio e já mostra como soa
+          }}
+        >
+          <Icone nome={avisosTv.prefs.som ? "som" : "somMudo"} tamanho={18} />
         </button>
         <button className={estilos.botao} onClick={telaCheia} aria-label="Tela cheia">
           <Icone nome="tela" tamanho={18} />
@@ -600,6 +625,25 @@ export default function ModoTV() {
                 </section>
               </div>
             </>
+          )}
+
+          {avisosTv.recentes.length > 0 && (
+            <div className={estilos.ultimos}>
+              <span className={estilos.ultimosTitulo}>Últimos cards de hoje</span>
+              <ul>
+                {avisosTv.recentes.map(function (c) {
+                  return (
+                    <li key={c.id}>
+                      <PontoLP site={{ id: c.siteId, cor: c.cor }} tamanho={10} />
+                      {c.siteNome}
+                      <span className={estilos.ultimosMudo}>
+                        {(c.origem ? "via " + c.origem : "acesso direto") + " · " + haQuanto(c.minAtras)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
 
           {!pausado && slides.length > 1 && (

@@ -45,5 +45,6 @@ export const config = {
     "/tv",
     "/saude",
     "/api/saude",
+    "/api/cards-novos",
   ],
 };

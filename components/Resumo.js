@@ -40,11 +40,11 @@ function F({ children }) {
 
 // "(12% a mais que no período anterior)" — null se não dá pra comparar.
 function fraseVariacao(atual, anterior, curta, parcial) {
-  var base = parcial ? "ontem até este horário" : "o período anterior";
+  var relacao = parcial ? "a ontem até este horário" : "ao período anterior";
   if (anterior == null || atual == null) return null;
   if (anterior === 0) return atual > 0 ? (parcial ? "ontem ainda não tinha visitas até este horário" : "sem período anterior para comparar") : null;
   var pct = ((atual - anterior) / anterior) * 100;
-  if (Math.abs(pct) < 1) return <>{curta ? "estável" : "estável em relação a " + base}</>;
+  if (Math.abs(pct) < 1) return <>{curta ? "estável" : "estável em relação " + relacao}</>;
   return (
     <>
       <F>{fmtPct1(Math.abs(pct))} {pct > 0 ? "a mais" : "a menos"}</F>
