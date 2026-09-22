@@ -14,6 +14,9 @@ import { ResumoPainel } from "../components/Resumo";
 import nomeFuso from "../components/nomeFuso";
 import { nomeEstado, nomeCidade } from "../components/geo";
 import { metaDoEscopo, resumoDaMeta } from "../lib/perfil";
+import { lerSiteInicial, salvarSite, lerPeriodoInicial, salvarPeriodo } from "../lib/filtroUrl";
+import Ajuda from "../components/Ajuda";
+import AJUDA from "../lib/ajuda";
 
 function ehClique(tipoEvento) {
   return tipoEvento.indexOf("clique_") === 0;
@@ -202,6 +205,35 @@ export default function Dashboard() {
   const [dataFim, setDataFim] = useState(new Date().toISOString().slice(0, 10));
   const [stats, setStats] = useState(null);
   const [carregando, setCarregando] = useState(false);
+  const [periodoHidratado, setPeriodoHidratado] = useState(false);
+
+  // Hidrata o período uma única vez, quando o router está pronto: prioriza
+  // a URL (ex: veio de outra tela pelo menu), senão o que ficou salvo da
+  // última visita, senão o padrão de 30 dias já usado no useState acima.
+  useEffect(
+    function () {
+      if (!router.isReady || periodoHidratado) return;
+      var p = lerPeriodoInicial(router.query, dataInicio, dataFim);
+      if (p.inicio !== dataInicio) setDataInicio(p.inicio);
+      if (p.fim !== dataFim) setDataFim(p.fim);
+      setPeriodoHidratado(true);
+    },
+    [router.isReady]
+  );
+
+  // Persiste o filtro (LP + período) na URL e no navegador, assim que os
+  // dois já estiverem hidratados — o menu lateral (Shell) usa a mesma URL
+  // pra levar o filtro pras outras telas do painel.
+  useEffect(
+    function () {
+      if (!siteSelecionado || !periodoHidratado) return;
+      salvarSite(siteSelecionado);
+      salvarPeriodo(dataInicio, dataFim);
+      var query = Object.assign({}, router.query, { site: siteSelecionado, inicio: dataInicio, fim: dataFim });
+      router.replace({ pathname: router.pathname, query: query }, undefined, { shallow: true });
+    },
+    [siteSelecionado, dataInicio, dataFim]
+  );
 
   useEffect(function () {
     fetch("/api/sites")
@@ -210,9 +242,12 @@ export default function Dashboard() {
       })
       .then(function (dados) {
         setSites(dados);
-        var slugDaUrl = router.query.site;
-        if (slugDaUrl && dados.some(function (s) { return s.slug === slugDaUrl; })) {
-          setSiteSelecionado(slugDaUrl);
+        var slugPreferido = router.query.site || lerSiteInicial(router.query);
+        if (
+          slugPreferido &&
+          (slugPreferido === "todas" || dados.some(function (s) { return s.slug === slugPreferido; }))
+        ) {
+          setSiteSelecionado(slugPreferido);
         } else if (dados.length > 0) {
           setSiteSelecionado(dados[0].slug);
         }
@@ -419,6 +454,7 @@ export default function Dashboard() {
           Atualiza sozinho a cada 10s <Relogio />
         </span>
       }
+      filtro={{ site: siteSelecionado, inicio: dataInicio, fim: dataFim }}
     >
       {sites.length === 0 ? (
         <EstadoVazio
@@ -498,7 +534,7 @@ export default function Dashboard() {
 
               <div className="cards">
                 <CartaoKpi
-                  rotulo="Visitantes únicos"
+                  rotulo={<>Visitantes únicos<Ajuda texto={AJUDA.visitantes} /></>}
                   valor={fmtN(k.visitantes)}
                   acento={corPrincipal}
                   serie={serieDe(stats, "visitantes")}
@@ -590,7 +626,7 @@ export default function Dashboard() {
                 )}
                 {metaKey !== "card_criado" && k.cards > 0 && (
                   <CartaoKpi
-                    rotulo="Taxa de cards"
+                    rotulo={<>Taxa de cards<Ajuda texto={AJUDA.taxaCards} /></>}
                     valor={fmtPct1(k.taxaCards)}
                     acento="#14b8a6"
                     secundario="dos visitantes únicos"
@@ -599,27 +635,33 @@ export default function Dashboard() {
                 )}
                 {metaKey === null && (
                   <CartaoKpi
-                    rotulo="Taxa de conversão"
+                    rotulo={<>Taxa de conversão<Ajuda texto={AJUDA.taxaConversao} /></>}
                     valor={fmtPct1(k.taxaConversao)}
                     acento="#22c55e"
                     rodape={kAnt && <RodapePP rotulo={rotuloAntes} atual={k.taxaConversao} anterior={kAnt.taxaConversao} />}
                   />
                 )}
                 <CartaoKpi
-                  rotulo="Taxa de rejeição"
+                  rotulo={<>Taxa de rejeição<Ajuda texto={AJUDA.rejeicao} /></>}
                   valor={fmtPct1(k.taxaRejeicao)}
                   acento="#f43f5e"
                   rodape={kAnt && <RodapePP rotulo={rotuloAntes} atual={k.taxaRejeicao} anterior={kAnt.taxaRejeicao} invertido />}
                 />
                 <CartaoKpi
-                  rotulo="Tempo médio na página"
+                  rotulo={<>Tempo médio na página<Ajuda texto={AJUDA.tempoNaPagina} /></>}
                   valor={fmtTempo(k.tempo)}
                   acento="#a78bfa"
                   rodape={kAnt && <RodapeDelta rotulo={rotuloAntes} atual={k.tempo} anterior={kAnt.tempo} formatar={fmtTempo} />}
                 />
               </div>
 
-              <Secao id="funil" titulo="Funil de visitantes" aberta={!secoesFechadas.funil} aoAlternar={alternarSecao}>
+              <Secao
+                id="funil"
+                titulo="Funil de visitantes"
+                aberta={!secoesFechadas.funil}
+                aoAlternar={alternarSecao}
+                extra={<Ajuda texto={AJUDA.funil} />}
+              >
                 <Funil funil={stats.funil} meta={metaKey} />
               </Secao>
 

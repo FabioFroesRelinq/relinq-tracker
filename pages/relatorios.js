@@ -10,6 +10,9 @@ import Esqueleto from "../components/Esqueleto";
 import Icone from "../components/Icones";
 import { PontoLP, corDaLP, corTextoSobre } from "../components/coresLP";
 import { Delta, DeltaPP, variacao } from "../components/Delta";
+import { lerSelecionadosInicial, salvarSelecionados, lerPeriodoInicial, salvarPeriodo } from "../lib/filtroUrl";
+import Ajuda from "../components/Ajuda";
+import AJUDA from "../lib/ajuda";
 import estilos from "../styles/relatorios.module.css";
 
 // ---------- Formatação ----------
@@ -412,6 +415,39 @@ export default function Relatorios() {
   const [erro, setErro] = useState("");
   const [metrica, setMetrica] = useState("visitantes");
   const [fechadas, setFechadas] = useState({});
+  const [filtroHidratado, setFiltroHidratado] = useState(false);
+
+  // Hidrata o filtro (LPs + período) uma única vez, quando o router está
+  // pronto: prioriza a URL (ex: veio do painel principal com uma LP e
+  // período já escolhidos), senão o que ficou salvo da última visita.
+  useEffect(
+    function () {
+      if (!router.isReady || filtroHidratado) return;
+      var lps = lerSelecionadosInicial(router.query);
+      if (lps.length > 0) setSelecionados(lps);
+      var p = lerPeriodoInicial(router.query, dataInicio, dataFim);
+      if (p.inicio !== dataInicio) setDataInicio(p.inicio);
+      if (p.fim !== dataFim) setDataFim(p.fim);
+      setFiltroHidratado(true);
+    },
+    [router.isReady]
+  );
+
+  // Persiste o filtro na URL e no navegador, assim que já estiver
+  // hidratado — o menu lateral (Shell) leva esse filtro pras outras telas.
+  useEffect(
+    function () {
+      if (!filtroHidratado) return;
+      salvarSelecionados(selecionados);
+      salvarPeriodo(dataInicio, dataFim);
+      var query = Object.assign({}, router.query, { inicio: dataInicio, fim: dataFim });
+      delete query.site; // essa tela usa seleção múltipla (lps), não site único
+      if (selecionados.length > 0) query.lps = selecionados.join(",");
+      else delete query.lps;
+      router.replace({ pathname: router.pathname, query: query }, undefined, { shallow: true });
+    },
+    [selecionados, dataInicio, dataFim]
+  );
 
   useEffect(function () {
     fetch("/api/sites")
@@ -611,6 +647,7 @@ export default function Relatorios() {
           <span>Carregando relatório…</span>
         )
       }
+      filtro={{ lps: selecionados, inicio: dataInicio, fim: dataFim }}
     >
       {/* --- Filtros (fixos no topo ao rolar) --- */}
       <div className="barra-filtros">
@@ -746,7 +783,7 @@ export default function Relatorios() {
               }
             />
             <CartaoKpi
-              rotulo="Tempo médio na página"
+              rotulo={<>Tempo médio na página<Ajuda texto={AJUDA.tempoNaPagina} /></>}
               valor={fmtTempo(atual.tempoMedio)}
               acento="#f59e0b"
               rodape={
@@ -759,7 +796,7 @@ export default function Relatorios() {
               }
             />
             <CartaoKpi
-              rotulo="Rolaram até 50%"
+              rotulo={<>Rolaram até 50%<Ajuda texto={AJUDA.profundidadeRolagem} /></>}
               valor={fmtPct(atual.scroll[50])}
               acento="#a78bfa"
               rodape={
@@ -859,7 +896,13 @@ export default function Relatorios() {
           </Secao>
 
           {/* --- Dispositivo --- */}
-          <Secao id="dispositivo" titulo="Dispositivo (visitantes únicos)" aberta={!fechadas.dispositivo} aoAlternar={alternarSecao}>
+          <Secao
+            id="dispositivo"
+            titulo="Dispositivo (visitantes únicos)"
+            aberta={!fechadas.dispositivo}
+            aoAlternar={alternarSecao}
+            extra={<Ajuda texto={AJUDA.dispositivo} />}
+          >
             <BarrasComparativas linhas={linhasDispositivo} comparando={comparando} />
             {comparando && <p className={estilos.nota}>A marca branca em cada barra indica o valor do período anterior.</p>}
           </Secao>

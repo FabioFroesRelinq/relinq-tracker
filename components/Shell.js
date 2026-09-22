@@ -5,6 +5,7 @@ import Icone from "./Icones";
 import AvisosCards from "./AvisosCards";
 import MenuAvisos from "./MenuAvisos";
 import useAvisoCards from "./useAvisoCards";
+import { montarQueryFiltro } from "../lib/filtroUrl";
 import estilos from "../styles/shell.module.css";
 
 const LOGO =
@@ -22,11 +23,14 @@ const ITENS = [
 
 // Estrutura comum das telas logadas: menu lateral fixo (gaveta no celular),
 // cabeçalho da página e alternância de tema claro/escuro.
-export default function Shell({ titulo, subtitulo, acoes, children }) {
+export default function Shell({ titulo, subtitulo, acoes, children, filtro }) {
   const router = useRouter();
   const [gavetaAberta, setGavetaAberta] = useState(false);
   const [tema, setTema] = useState("escuro");
   const avisosCard = useAvisoCards();
+  // Sufixo com o filtro (LP/período) da página atual, pra quem navegar
+  // pelo menu lateral continuar vendo o mesmo recorte na página seguinte.
+  const sufixoFiltro = montarQueryFiltro(filtro);
 
   useEffect(function () {
     setTema(document.documentElement.getAttribute("data-tema") === "claro" ? "claro" : "escuro");
@@ -121,7 +125,7 @@ export default function Shell({ titulo, subtitulo, acoes, children }) {
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={item.href + sufixoFiltro}
                 className={estilos.item + (on ? " " + estilos.itemAtivo : "")}
                 aria-current={on ? "page" : undefined}
               >

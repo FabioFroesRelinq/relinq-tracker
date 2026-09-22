@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import Relogio from "../components/Relogio";
 import Shell from "../components/Shell";
 import EstadoVazio from "../components/EstadoVazio";
 import Esqueleto from "../components/Esqueleto";
 import { PontoLP } from "../components/coresLP";
+import { lerPeriodoInicial, salvarPeriodo } from "../lib/filtroUrl";
 
 function formatarData(date) {
   return date.toISOString().slice(0, 10);
 }
 
 export default function VisaoGeral() {
+  const router = useRouter();
   const [dataInicio, setDataInicio] = useState(
     formatarData(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
   );
@@ -18,6 +21,30 @@ export default function VisaoGeral() {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [infoSites, setInfoSites] = useState({}); // slug -> LP (pra pegar a cor)
+  const [periodoHidratado, setPeriodoHidratado] = useState(false);
+
+  // Hidrata o período uma única vez (URL, senão o que ficou salvo da
+  // última visita) e depois persiste na URL/navegador a cada mudança.
+  useEffect(
+    function () {
+      if (!router.isReady || periodoHidratado) return;
+      var p = lerPeriodoInicial(router.query, dataInicio, dataFim);
+      if (p.inicio !== dataInicio) setDataInicio(p.inicio);
+      if (p.fim !== dataFim) setDataFim(p.fim);
+      setPeriodoHidratado(true);
+    },
+    [router.isReady]
+  );
+
+  useEffect(
+    function () {
+      if (!periodoHidratado) return;
+      salvarPeriodo(dataInicio, dataFim);
+      var query = Object.assign({}, router.query, { inicio: dataInicio, fim: dataFim });
+      router.replace({ pathname: router.pathname, query: query }, undefined, { shallow: true });
+    },
+    [dataInicio, dataFim]
+  );
 
   useEffect(function () {
     fetch("/api/sites")

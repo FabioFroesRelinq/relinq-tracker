@@ -118,6 +118,13 @@ const CAMINHOS = {
       <path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z" />
     </>
   ),
+  ajuda: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.3 9.2a2.7 2.7 0 0 1 5.2 1c0 1.8-2.5 2-2.5 3.6" />
+      <path d="M12 17.2v.01" />
+    </>
+  ),
 };
 
 export default function Icone({ nome, tamanho = 18, className }) {
