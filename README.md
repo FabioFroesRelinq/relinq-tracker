@@ -29,6 +29,7 @@ uma nova publicação.
    mysql -u root -p relinq_tracker_db < db/migration-4.sql   # cor das LPs (opcional)
    mysql -u root -p relinq_tracker_db < db/migration-5.sql   # geografia dos visitantes (opcional)
    mysql -u root -p relinq_tracker_db < db/migration-6.sql   # perfil da LP: meta e eventos esperados (opcional)
+   mysql -u root -p relinq_tracker_db < db/migration-7.sql   # aba Clientes: dados do formulário de cadastro (opcional)
    ```
    Na Hostinger (via phpMyAdmin), é o mesmo conteúdo, só sem os comandos
    `CREATE DATABASE`/`USE` — cole direto com o banco certo já selecionado.
@@ -181,6 +182,31 @@ checkouts prontos) — dois recursos cobrem o funil sem precisar de código:
 **Instalando na InLead:** abra o funil → aba **Configurações** →
 **Pixel/Scripts** → cole a tag do tracker no campo **Head** → **Concluído**
 → **Publicar**.
+
+---
+
+## Destino compartilhado por LPs diferentes (ex: um checkout único)
+
+Quando duas ou mais LPs mandam tráfego pro mesmo destino externo (ex: um
+único checkout que recebe pedidos vindas de LPs diferentes), dá pra
+registrar a conversão na LP certa mesmo sem instalar um `<script>` por LP
+nesse destino: o parâmetro `?relinq_site=slug-da-lp` na URL decide de qual
+LP é o evento, e tem prioridade sobre o `data-site` fixo do `<script>`.
+
+1. Cada LP inclui esse parâmetro no próprio link de saída pro destino
+   compartilhado (ex: `https://checkout.com/pagar?relinq_site=relinq-beauty`),
+   do mesmo jeito que o tracker já inclui `?relinq_visitor=...` sozinho
+   hoje em qualquer link pra outro domínio.
+2. O destino só precisa **repassar esse parâmetro adiante** (junto com o
+   `relinq_visitor`) até a página final, tipicamente a de "pagamento
+   aprovado" — isso depende do sistema de checkout conseguir carregar
+   esses parâmetros da URL de entrada até a URL de saída; se ele não fizer
+   isso sozinho, precisa de um ajuste no código do checkout pra guardar
+   os parâmetros recebidos e devolvê-los na URL de redirecionamento final.
+3. Nessa página final, instala o `tracker.js` (sem `data-site`, já que
+   quem decide é o `relinq_site` da URL) com `?relinq_evento=conversao`
+   também na URL — o evento dispara sozinho ao carregar, já atribuído à
+   LP certa.
 
 ---
 
@@ -357,6 +383,31 @@ Na tag "Solicitação HTTP" vinculada ao trigger "Todos os Eventos - GA4":
   `/relatorios` mostram "Cards criados" e "Taxa de cards" (visitantes
   únicos que criaram card ÷ visitantes únicos); no relatório entram também
   na comparação entre LPs, no gráfico diário e no CSV.
+- **`/clientes` (dados de quem preencheu o cadastro)**: diferente do resto
+  do tracker, essa tela guarda dado pessoal de verdade (nome, e-mail,
+  celular, empresa, plano, cupom) — pensada pra quando o formulário de
+  cadastro/checkout é em outro sistema (ex: `app.relinqbeauty.com.br`), não
+  na própria LP, então o tracker não vê o envio sozinho. Esse outro sistema
+  precisa mandar os dados pro tracker manualmente, com um POST autenticado:
+  ```
+  POST /api/lead-checkout
+  Header: x-lead-secret: <mesmo valor de LEAD_CHECKOUT_SECRET>
+  Body (JSON): { "visitor_id": "...", "nome": "...", "email": "...",
+                 "celular": "...", "empresa": "...", "cupom": "...",
+                 "plano": "...", "ciclo": "..." }
+  ```
+  O `visitor_id` é o mesmo que já chega em `?relinq_visitor=...` na URL do
+  sistema externo (o `tracker.js` já propaga esse parâmetro sozinho em
+  qualquer link pra outro domínio) — é por ele que o tracker descobre de
+  qual LP esse cliente veio (olhando o último evento conhecido desse
+  visitante), sem precisar de nenhum parâmetro novo na URL. Recomendado
+  disparar esse POST assim que os dados básicos forem preenchidos (ex: ao
+  clicar em "Continuar" no primeiro passo do formulário), não só no envio
+  final — assim quem abandona no meio do caminho também aparece na lista.
+  A coluna "Converteu" na tela é calculada na hora, cruzando o `visitor_id`
+  com o evento `conversao` já existente — não precisa de nenhuma ação
+  extra pra ela funcionar. Precisa de `db/migration-7.sql`; sem ela a tela
+  mostra um aviso pra rodar a migration, sem quebrar o resto do painel.
 
 ---
 
@@ -410,6 +461,14 @@ relinq-tracker/
   pages/relatorios.js                           -> relatório de dispositivo, rolagem e tempo (com comparação e CSV)
   pages/api/relatorios.js                         -> métricas do relatório (protegida)
   styles/relatorios.module.css                      -> estilos exclusivos da página de relatórios
+  lib/filtroUrl.js                                    -> filtro (LP/período) persistente na URL e no navegador
+  components/Ajuda.js                                  -> ícone "?" com popover explicando uma métrica/seção
+  lib/ajuda.js                                          -> textos usados pelo componente Ajuda
+  styles/ajuda.module.css                                -> estilos do componente Ajuda
+  pages/clientes.js                                        -> tela "Clientes": dados de quem preencheu o cadastro
+  pages/api/clientes.js                                     -> lista os clientes com filtro (protegida)
+  pages/api/lead-checkout.js                                 -> recebe os dados do formulário de cadastro/checkout de fora (pública, autenticada por segredo)
+  db/migration-7.sql                                          -> tabela "clientes"
   public/tracker.js                             -> snippet único a ser instalado em qualquer LP
 ```
 

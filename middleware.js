@@ -23,14 +23,17 @@ export async function middleware(req) {
   return NextResponse.redirect(loginUrl);
 }
 
-// Só essas rotas passam pelo middleware — /api/track, /tracker.js e /login
-// ficam de fora da lista, então continuam acessíveis sem sessão.
+// Só essas rotas passam pelo middleware — /api/track, /api/lead-checkout,
+// /tracker.js e /login ficam de fora da lista, então continuam acessíveis
+// sem sessão (a segunda tem seu próprio segredo compartilhado, ver
+// pages/api/lead-checkout.js).
 export const config = {
   matcher: [
     "/",
     "/sites",
     "/visao-geral",
     "/jornada",
+    "/clientes",
     "/api/sites",
     "/api/sites/:path*",
     "/api/stats",
@@ -39,6 +42,8 @@ export const config = {
     "/api/visao-geral/:path*",
     "/api/jornada",
     "/api/jornada/:path*",
+    "/api/clientes",
+    "/api/clientes/:path*",
     "/relatorios",
     "/api/relatorios",
     "/api/relatorios/:path*",

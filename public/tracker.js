@@ -60,13 +60,34 @@
  *    tentativa automática de achar um rótulo (pergunta/resposta) e um
  *    valor numérico (progresso/percentual) dentro do objeto do evento.
  *    Não precisa configurar nada a mais pra isso funcionar.
+ *
+ * DESTINO COMPARTILHADO POR LPS DIFERENTES (ex: um único checkout que
+ * recebe tráfego de duas ou mais LPs, cada uma com seu próprio link):
+ * o parâmetro ?relinq_site=slug-da-lp na URL decide de qual LP é o
+ * evento, tendo prioridade sobre o data-site fixo do <script>. Cada LP
+ * inclui esse parâmetro no próprio link de saída pro destino compartilhado
+ * (ex: .../checkout?relinq_site=relinq-beauty), do mesmo jeito que já
+ * inclui ?relinq_visitor=... automaticamente — o destino só precisa
+ * repassar esse parâmetro adiante até a página final onde o evento é
+ * disparado (ex: a página de "pagamento aprovado").
  */
 (function () {
   var scriptTag = document.currentScript;
   var site = scriptTag ? scriptTag.getAttribute("data-site") : null;
 
+  // Permite decidir a LP pela URL em vez do atributo data-site fixo no
+  // <script> — útil quando uma mesma página de destino (ex: "sucesso" de
+  // um checkout compartilhado por LPs diferentes) precisa atribuir o
+  // evento a LPs diferentes, dependendo de qual LP originou a visita. O
+  // link de saída de cada LP pra esse destino leva esse parâmetro (ex:
+  // ...?relinq_site=relinq-beauty), do mesmo jeito que já leva
+  // ?relinq_visitor=... hoje. Se presente, tem prioridade sobre o
+  // data-site do script.
+  var siteDaUrl = new URLSearchParams(window.location.search).get("relinq_site");
+  if (siteDaUrl) site = siteDaUrl;
+
   if (!site) {
-    console.warn("[Relinq Tracker] atributo data-site não encontrado no <script>. Eventos não serão enviados.");
+    console.warn("[Relinq Tracker] LP não identificada: falta data-site no <script> (ou ?relinq_site= na URL). Eventos não serão enviados.");
     return;
   }
 

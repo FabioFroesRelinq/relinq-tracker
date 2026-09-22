@@ -29,15 +29,27 @@ export default function Jornada() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
 
+  // IDs gerados pelo tracker.js seguem o formato v_<timestamp>_<aleatório>
+  // (ex: v_muabo0k8_pnm4p1q7). Se o texto colado já bate com esse formato,
+  // pula a busca por rótulo e abre a jornada direto por esse ID.
+  var PADRAO_VISITOR_ID = /^v_[a-z0-9]+_[a-z0-9]+$/i;
+
   function buscarCandidatos(e) {
     e.preventDefault();
-    if (!busca.trim()) return;
+    var termo = busca.trim();
+    if (!termo) return;
+
+    if (PADRAO_VISITOR_ID.test(termo)) {
+      abrirVisitante(termo);
+      return;
+    }
+
     setErro("");
     setCarregando(true);
     setEventos(null);
     setVisitorAtual(null);
 
-    fetch("/api/jornada?busca=" + encodeURIComponent(busca.trim()))
+    fetch("/api/jornada?busca=" + encodeURIComponent(termo))
       .then(function (r) {
         return r.json();
       })
