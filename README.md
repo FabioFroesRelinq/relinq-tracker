@@ -30,6 +30,8 @@ uma nova publicação.
    mysql -u root -p relinq_tracker_db < db/migration-5.sql   # geografia dos visitantes (opcional)
    mysql -u root -p relinq_tracker_db < db/migration-6.sql   # perfil da LP: meta e eventos esperados (opcional)
    mysql -u root -p relinq_tracker_db < db/migration-7.sql   # aba Clientes: dados do formulário de cadastro (opcional)
+   mysql -u root -p relinq_tracker_db < db/migration-8.sql   # aba Onboarding: respostas estruturadas de fluxos internos (opcional)
+   mysql -u root -p relinq_tracker_db < db/migration-9.sql   # torna visitor_id único em "clientes" (opcional, mas recomendado com /api/lead-checkout em várias etapas)
    ```
    Na Hostinger (via phpMyAdmin), é o mesmo conteúdo, só sem os comandos
    `CREATE DATABASE`/`USE` — cole direto com o banco certo já selecionado.
@@ -154,7 +156,51 @@ document.getElementById('form-cadastro').addEventListener('submit', function () 
 - **`quiz_finalizado`** (ou nome parecido) — pra marcos do meio do funil
   que não são a venda em si (ex: quiz respondido até o fim, lead
   capturado). Aparece como um card separado no painel ("Quizzes
-  finalizados") quando presente, sem misturar com a conversão real.
+  finalizados") quando presente, sem misturar com a conversão real. É
+  também o evento que marca a conclusão de um onboarding (ver abaixo).
+
+---
+
+## Onboarding/quiz de várias telas dentro do próprio app
+
+Pra fluxos de várias telas **dentro do próprio app** (sem troca de página
+entre elas — ex: um wizard de configuração em React), o `clique_` e o
+`tempo_pagina` automáticos não ajudam, porque só existe uma "página" pro
+tracker ver. Pra esses casos, chame `relinqTrackPasso` a cada troca de
+etapa:
+
+```js
+relinqTrackPasso('onboard_servicos', {
+  valor: 14,                                    // segundos gastos nessa etapa (opcional)
+  rotulo: 'Corte feminino, Hidratação',          // resposta curta, pra quebra no painel (opcional)
+  respostas: { selecionados: ['Corte feminino', 'Hidratação'] }, // resposta estruturada (opcional)
+});
+
+// ao concluir o fluxo inteiro:
+relinqTrack('quiz_finalizado');
+```
+
+- **`onboard_algumacoisa`** — qualquer evento começando com `onboard_`
+  vira uma etapa do funil na tela `/onboarding`, automaticamente, na
+  ordem de quantos visitantes chegaram em cada uma (sem precisar cadastrar
+  os passos em lugar nenhum).
+- **`valor`** — segundos gastos naquela etapa, do mesmo jeito que já é
+  usado em `tempo_pagina`/`video_pause`. Vira o "tempo médio" mostrado no
+  funil.
+- **`rotulo`** — resposta curta (ex: qual opção única foi escolhida),
+  igual ao rótulo de clique — aparece quebrado por opção no painel.
+- **`respostas`** — qualquer objeto/array serializável em JSON, pra
+  respostas ricas demais pra caber num rótulo curto (múltipla seleção,
+  preço e duração por serviço, horário de atendimento por dia da semana
+  etc.). Fica guardado à parte, na tabela `onboarding_respostas`
+  (`db/migration-8.sql`), e não afeta a contagem do funil. Sem essa
+  migration, o resto continua funcionando normalmente — só o conteúdo
+  detalhado das respostas fica de fora.
+- **Conclusão do fluxo** — dispare `relinqTrack('quiz_finalizado')` (a
+  mesma convenção já usada pra marcos do meio do funil). É o que a tela
+  `/onboarding` usa pra calcular "concluíram" e a taxa de conclusão, e
+  pra decidir quem "abandonou" (teve algum passo, mas nunca chegou nesse
+  evento).
 
 ---
 
@@ -404,10 +450,30 @@ Na tag "Solicitação HTTP" vinculada ao trigger "Todos os Eventos - GA4":
   disparar esse POST assim que os dados básicos forem preenchidos (ex: ao
   clicar em "Continuar" no primeiro passo do formulário), não só no envio
   final — assim quem abandona no meio do caminho também aparece na lista.
+  Pra um cadastro em várias etapas, dá pra chamar esse endpoint uma vez por
+  etapa (cada uma mandando só os campos que já tem) sem medo de duplicar:
+  com `db/migration-9.sql` rodada, o `visitor_id` é único em `clientes` e
+  cada chamada seguinte **atualiza** a linha existente (só sobrescreve os
+  campos que vierem preenchidos; um campo omitido numa chamada não apaga o
+  que já tinha sido salvo antes).
+
   A coluna "Converteu" na tela é calculada na hora, cruzando o `visitor_id`
   com o evento `conversao` já existente — não precisa de nenhuma ação
   extra pra ela funcionar. Precisa de `db/migration-7.sql`; sem ela a tela
   mostra um aviso pra rodar a migration, sem quebrar o resto do painel.
+- **`/onboarding` (funil de um fluxo de várias telas dentro do app)**: pensada
+  pra wizards de configuração como o onboarding do `app.relinqbeauty.com.br`
+  (várias etapas na mesma página, sem reload) — ver a seção "Onboarding/quiz
+  de várias telas dentro do próprio app" acima pra como instrumentar. Mostra
+  quantos visitantes iniciaram, quantos concluíram (evento `quiz_finalizado`)
+  e a taxa de conclusão; o funil de etapas (`onboard_*`) com % de queda e
+  tempo médio em cada uma, na ordem de quantos visitantes chegaram nelas; a
+  quebra das respostas curtas (rotuladas) e estruturadas (via `respostas`)
+  por etapa; e a lista de quem abandonou no meio do caminho, com link direto
+  pra `/jornada` daquele visitante. O funil (etapas/tempo/conclusão) funciona
+  só com `events`, sem nenhuma migration nova; o conteúdo detalhado das
+  respostas estruturadas precisa de `db/migration-8.sql` — sem ela, o resto
+  da tela funciona normalmente.
 
 ---
 
@@ -469,6 +535,10 @@ relinq-tracker/
   pages/api/clientes.js                                     -> lista os clientes com filtro (protegida)
   pages/api/lead-checkout.js                                 -> recebe os dados do formulário de cadastro/checkout de fora (pública, autenticada por segredo)
   db/migration-7.sql                                          -> tabela "clientes"
+  db/migration-9.sql                                           -> visitor_id único em "clientes" (POST em várias etapas sem duplicar)
+  pages/onboarding.js                                            -> tela "Onboarding": funil, tempo e respostas de fluxos internos (ex: app.relinqbeauty.com.br)
+  pages/api/onboarding.js                                         -> estatísticas do onboarding (funil, conclusão, respostas, abandonos) (protegida)
+  db/migration-8.sql                                               -> tabela "onboarding_respostas"
   public/tracker.js                             -> snippet único a ser instalado em qualquer LP
 ```
 

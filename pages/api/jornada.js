@@ -24,7 +24,34 @@ export default async function handler(req, res) {
          ORDER BY e.criado_em ASC`,
         [visitor_id]
       );
-      return res.status(200).json({ visitor_id, eventos });
+
+      // Conteúdo detalhado das respostas de onboarding desse visitante
+      // (migration-8, opcional) — mostrado à parte da linha do tempo acima,
+      // já que é uma etapa "onboard_*" com o JSON completo da resposta.
+      let respostasOnboarding = [];
+      try {
+        const [linhas] = await pool.query(
+          `SELECT passo, respostas_json,
+                  DATE_FORMAT(DATE_ADD(criado_em, INTERVAL ${desl} MINUTE), '%Y-%m-%d %H:%i:%s') AS criado_em
+           FROM onboarding_respostas
+           WHERE visitor_id = ?
+           ORDER BY criado_em ASC`,
+          [visitor_id]
+        );
+        respostasOnboarding = linhas.map(function (l) {
+          let respostas = null;
+          try {
+            respostas = JSON.parse(l.respostas_json);
+          } catch (e) {}
+          return { passo: l.passo, respostas, criado_em: l.criado_em };
+        });
+      } catch (erroRespostas) {
+        if (!(erroRespostas && erroRespostas.code === "ER_NO_SUCH_TABLE")) {
+          console.error("Erro ao buscar respostas de onboarding na jornada:", erroRespostas);
+        }
+      }
+
+      return res.status(200).json({ visitor_id, eventos, respostasOnboarding });
     }
 
     // Busca candidatos por um pedaço de texto no rótulo (ex: e-mail
