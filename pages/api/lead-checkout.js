@@ -78,9 +78,25 @@ export default async function handler(req, res) {
     );
     const siteId = origemRows.length > 0 ? origemRows[0].site_id : null;
 
+    // "ON DUPLICATE KEY" (migration-9: visitor_id único) — permite chamar
+    // esse endpoint mais de uma vez pro mesmo visitante (ex: um POST a cada
+    // passo de um cadastro em várias etapas, pra capturar quem abandona no
+    // meio) sem criar linhas duplicadas: a 2ª chamada atualiza a linha já
+    // existente. COALESCE evita apagar um campo já salvo quando uma
+    // chamada seguinte simplesmente não manda esse campo de novo (ex: o
+    // passo 2 manda "empresa" mas não repete "celular" do passo 1).
     await pool.query(
       `INSERT INTO clientes (visitor_id, site_id, nome, email, celular, empresa, cupom, plano, ciclo)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         site_id = COALESCE(VALUES(site_id), site_id),
+         nome = COALESCE(VALUES(nome), nome),
+         email = COALESCE(VALUES(email), email),
+         celular = COALESCE(VALUES(celular), celular),
+         empresa = COALESCE(VALUES(empresa), empresa),
+         cupom = COALESCE(VALUES(cupom), cupom),
+         plano = COALESCE(VALUES(plano), plano),
+         ciclo = COALESCE(VALUES(ciclo), ciclo)`,
       [
         visitor_id,
         siteId,

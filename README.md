@@ -31,6 +31,7 @@ uma nova publicação.
    mysql -u root -p relinq_tracker_db < db/migration-6.sql   # perfil da LP: meta e eventos esperados (opcional)
    mysql -u root -p relinq_tracker_db < db/migration-7.sql   # aba Clientes: dados do formulário de cadastro (opcional)
    mysql -u root -p relinq_tracker_db < db/migration-8.sql   # aba Onboarding: respostas estruturadas de fluxos internos (opcional)
+   mysql -u root -p relinq_tracker_db < db/migration-9.sql   # torna visitor_id único em "clientes" (opcional, mas recomendado com /api/lead-checkout em várias etapas)
    ```
    Na Hostinger (via phpMyAdmin), é o mesmo conteúdo, só sem os comandos
    `CREATE DATABASE`/`USE` — cole direto com o banco certo já selecionado.
@@ -449,6 +450,13 @@ Na tag "Solicitação HTTP" vinculada ao trigger "Todos os Eventos - GA4":
   disparar esse POST assim que os dados básicos forem preenchidos (ex: ao
   clicar em "Continuar" no primeiro passo do formulário), não só no envio
   final — assim quem abandona no meio do caminho também aparece na lista.
+  Pra um cadastro em várias etapas, dá pra chamar esse endpoint uma vez por
+  etapa (cada uma mandando só os campos que já tem) sem medo de duplicar:
+  com `db/migration-9.sql` rodada, o `visitor_id` é único em `clientes` e
+  cada chamada seguinte **atualiza** a linha existente (só sobrescreve os
+  campos que vierem preenchidos; um campo omitido numa chamada não apaga o
+  que já tinha sido salvo antes).
+
   A coluna "Converteu" na tela é calculada na hora, cruzando o `visitor_id`
   com o evento `conversao` já existente — não precisa de nenhuma ação
   extra pra ela funcionar. Precisa de `db/migration-7.sql`; sem ela a tela
@@ -527,6 +535,7 @@ relinq-tracker/
   pages/api/clientes.js                                     -> lista os clientes com filtro (protegida)
   pages/api/lead-checkout.js                                 -> recebe os dados do formulário de cadastro/checkout de fora (pública, autenticada por segredo)
   db/migration-7.sql                                          -> tabela "clientes"
+  db/migration-9.sql                                           -> visitor_id único em "clientes" (POST em várias etapas sem duplicar)
   pages/onboarding.js                                            -> tela "Onboarding": funil, tempo e respostas de fluxos internos (ex: app.relinqbeauty.com.br)
   pages/api/onboarding.js                                         -> estatísticas do onboarding (funil, conclusão, respostas, abandonos) (protegida)
   db/migration-8.sql                                               -> tabela "onboarding_respostas"
