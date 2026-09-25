@@ -16,6 +16,7 @@ const ITENS = [
   { href: "/visao-geral", rotulo: "Visão geral", icone: "comparar" },
   { href: "/relatorios", rotulo: "Relatórios", icone: "relatorios" },
   { href: "/clientes", rotulo: "Clientes", icone: "inbox" },
+  { href: "/onboarding", rotulo: "Onboarding", icone: "barras" },
   { href: "/jornada", rotulo: "Jornada", icone: "jornada" },
   { href: "/saude", rotulo: "Saúde do tracking", icone: "pulso" },
   { href: "/sites", rotulo: "Cadastrar LP", icone: "mais" },
