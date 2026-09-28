@@ -57,9 +57,11 @@ var COR_ATUAL = "#6366f1";
 var COR_ANTERIOR = "#94a3b8";
 
 var NOMES_DISPOSITIVO = {
-  mobile: "Celular",
+  mobile: "Celular (web)",
   desktop: "Computador",
   tablet: "Tablet",
+  app_ios: "App iOS",
+  app_android: "App Android",
   outro: "Desconhecido",
 };
 
@@ -67,6 +69,8 @@ var CORES_DISPOSITIVO = {
   mobile: "#06b6d4",
   desktop: "#6366f1",
   tablet: "#f59e0b",
+  app_ios: "#a855f7",
+  app_android: "#22c55e",
   outro: "#64748b",
 };
 
@@ -85,7 +89,7 @@ function pct(parte, total) {
 function derivar(m) {
   if (!m) return null;
   var d = m.dispositivo;
-  var somaDisp = d.mobile + d.desktop + d.tablet + d.outro;
+  var somaDisp = d.mobile + d.desktop + d.tablet + d.app_ios + d.app_android + d.outro;
   return {
     visitantes: m.visitantes,
     visitas: m.visitas,
@@ -97,6 +101,8 @@ function derivar(m) {
       mobile: pct(d.mobile, somaDisp),
       desktop: pct(d.desktop, somaDisp),
       tablet: pct(d.tablet, somaDisp),
+      app_ios: pct(d.app_ios, somaDisp),
+      app_android: pct(d.app_android, somaDisp),
       outro: pct(d.outro, somaDisp),
     },
     scrollN: m.scroll,
@@ -328,6 +334,8 @@ function exportarCsv(dados) {
     "Celular (%)",
     "Computador (%)",
     "Tablet (%)",
+    "App iOS (%)",
+    "App Android (%)",
     "Rolagem 25% (%)",
     "Rolagem 50% (%)",
     "Rolagem 75% (%)",
@@ -355,6 +363,8 @@ function exportarCsv(dados) {
       csvNumero(a.disp.mobile),
       csvNumero(a.disp.desktop),
       csvNumero(a.disp.tablet),
+      csvNumero(a.disp.app_ios),
+      csvNumero(a.disp.app_android),
       csvNumero(a.scroll[25]),
       csvNumero(a.scroll[50]),
       csvNumero(a.scroll[75]),
@@ -561,7 +571,7 @@ export default function Relatorios() {
     : [];
 
   var linhasDispositivo = atual
-    ? ["mobile", "desktop", "tablet", "outro"]
+    ? ["mobile", "desktop", "tablet", "app_ios", "app_android", "outro"]
         .filter(function (k) {
           return atual.dispN[k] > 0 || (anterior && anterior.dispN[k] > 0);
         })

@@ -148,7 +148,8 @@ export default async function handler(req, res) {
     video_id,       // identifica o video, se houver mais de um na LP
     valor,          // uso livre: percentual (video_progress/scroll_profundidade) ou segundos (tempo_pagina, etc.)
     visitor_id,     // ID anônimo do visitante (localStorage), pra visitantes únicos e bounce rate
-    dispositivo,    // 'mobile', 'tablet' ou 'desktop'
+    dispositivo,    // 'mobile', 'tablet', 'desktop' (o tracker.js já resolve pra web) ou
+                     // 'app_ios' / 'app_android' (apps nativos, que chamam esse endpoint direto)
     utm_source,
     utm_medium,
     utm_campaign,
