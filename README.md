@@ -203,15 +203,19 @@ relinqTrack('quiz_finalizado');
   pra decidir quem "abandonou" (teve algum passo, mas nunca chegou nesse
   evento).
 
-### Comparando dois ou mais onboards
+### Comparando com outro onboard
 
 Quando existe mais de um fluxo de onboarding cadastrado (cada um como uma
-LP/site diferente), selecionar **2 ou mais** nos chips do topo da tela
-`/onboarding` troca a visão pra um modo de comparação: uma tabela com os
-KPIs de cada onboard lado a lado, e o funil comparado **por posição da
-etapa** ("Tela 01", "Tela 02"...) em vez do nome técnico do evento — assim
-dá pra comparar "a 1ª tela do onboard A" com "a 1ª tela do onboard B" mesmo
-que o conteúdo de cada uma seja completamente diferente entre os fluxos.
+LP/site diferente), com um onboard específico selecionado no topo da tela
+`/onboarding` (não "Todas as LPs"), aparece um seletor **"Comparar com
+outro onboarding..."** ao lado do título da seção "Funil de etapas". Ao
+escolher o segundo onboard ali, essa seção passa a mostrar os KPIs dos dois
+lado a lado e o funil comparado **por posição da etapa** ("Tela 01", "Tela
+02"...) em vez do nome técnico do evento — assim dá pra comparar "a 1ª tela
+do onboard A" com "a 1ª tela do onboard B" mesmo que o conteúdo de cada uma
+seja completamente diferente entre os fluxos. O resto da tela (KPIs gerais,
+respostas, abandonos) continua sempre sobre o onboard escolhido no seletor
+do topo.
 
 ---
 
