@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Shell from "../components/Shell";
 
+var EVENTOS_DE_CONCLUSAO = ["quiz_finalizado", "conversao"];
+
 function nomeAmigavelEvento(tipoEvento) {
   var mapa = {
     visita: "Visita",
@@ -11,7 +13,117 @@ function nomeAmigavelEvento(tipoEvento) {
     whatsapp_nao_abriu: "WhatsApp não abriu",
   };
   if (mapa[tipoEvento]) return mapa[tipoEvento];
-  return tipoEvento.replace(/_/g, " ");
+  // "onboard_precos_duracao" -> "Precos duracao" (mesma convenção da tela /onboarding).
+  var semPrefixo = tipoEvento.replace(/^onboard_/, "").replace(/_/g, " ");
+  return semPrefixo.charAt(0).toUpperCase() + semPrefixo.slice(1);
+}
+
+function formatarChave(chave) {
+  var s = String(chave).replace(/_/g, " ");
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function formatarValorSimples(v) {
+  if (v == null || v === "") return "—";
+  if (typeof v === "boolean") return v ? "Sim" : "Não";
+  return String(v);
+}
+
+// Lista curta (múltipla seleção, opções simples) -> chips, em vez de um array JSON cru.
+function ListaChips({ itens }) {
+  if (!itens || itens.length === 0) return <span className="vazio">—</span>;
+  return (
+    <div className="resposta-chips">
+      {itens.map(function (item, i) {
+        return (
+          <span className="resposta-chip" key={i}>
+            {formatarValorSimples(item)}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// Lista de objetos (ex: preço/duração por serviço) -> tabela, colunas tiradas
+// dinamicamente das chaves que aparecerem (sem precisar cadastrar em lugar nenhum).
+function TabelaDeObjetos({ linhas }) {
+  var colunas = [];
+  linhas.forEach(function (l) {
+    Object.keys(l).forEach(function (k) {
+      if (colunas.indexOf(k) === -1) colunas.push(k);
+    });
+  });
+  return (
+    <table className="tabela-mini">
+      <thead>
+        <tr>
+          {colunas.map(function (c) {
+            return <th key={c}>{formatarChave(c)}</th>;
+          })}
+        </tr>
+      </thead>
+      <tbody>
+        {linhas.map(function (l, i) {
+          return (
+            <tr key={i}>
+              {colunas.map(function (c) {
+                return <td key={c}>{formatarValorSimples(l[c])}</td>;
+              })}
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+// Objeto chave->valor (ex: horário de atendimento por dia da semana) -> tabela
+// de duas colunas, com o valor de cada linha renderizado recursivamente.
+function TabelaChaveValor({ objeto }) {
+  var chaves = Object.keys(objeto);
+  if (chaves.length === 0) return <span className="vazio">—</span>;
+  return (
+    <table className="tabela-mini">
+      <tbody>
+        {chaves.map(function (chave) {
+          return (
+            <tr key={chave}>
+              <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{formatarChave(chave)}</td>
+              <td>{renderizarResposta(objeto[chave])}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+// Decide como mostrar a resposta estruturada de uma etapa, conforme o formato
+// que relinqTrackPasso(..., { respostas }) mandou — sem precisar saber de
+// antemão qual é o "tipo" de cada etapa.
+function renderizarResposta(valor) {
+  if (valor == null) return <span className="vazio">—</span>;
+
+  // { selecionados: [...] } -> convenção de múltipla seleção do README.
+  if (!Array.isArray(valor) && typeof valor === "object" && Array.isArray(valor.selecionados)) {
+    return <ListaChips itens={valor.selecionados} />;
+  }
+
+  if (Array.isArray(valor)) {
+    var todosObjetos =
+      valor.length > 0 &&
+      valor.every(function (v) {
+        return v && typeof v === "object" && !Array.isArray(v);
+      });
+    return todosObjetos ? <TabelaDeObjetos linhas={valor} /> : <ListaChips itens={valor} />;
+  }
+
+  if (typeof valor === "object") {
+    return <TabelaChaveValor objeto={valor} />;
+  }
+
+  return <span>{formatarValorSimples(valor)}</span>;
 }
 
 // A API já manda o horário pronto ("2026-09-21 13:45:00", em horário de Brasília).
@@ -191,34 +303,54 @@ export default function Jornada() {
             <p className="vazio">Nenhum evento encontrado pra esse visitante.</p>
           )}
 
-          {eventos && eventos.length > 0 && (
-            <table>
-              <thead>
-                <tr>
-                  <th>Quando</th>
-                  <th>LP</th>
-                  <th>Evento</th>
-                  <th>Rótulo</th>
-                  <th>Página</th>
-                </tr>
-              </thead>
-              <tbody>
-                {eventos.map(function (ev, i) {
-                  return (
-                    <tr key={i}>
-                      <td>{formatarData(ev.criado_em)}</td>
-                      <td>{ev.site_nome}</td>
-                      <td>{nomeAmigavelEvento(ev.tipo_evento)}</td>
-                      <td>{ev.rotulo || "—"}</td>
-                      <td style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {ev.pagina || "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+          {eventos && eventos.length > 0 && (function () {
+            var teveOnboarding = eventos.some(function (ev) {
+              return ev.tipo_evento.indexOf("onboard_") === 0;
+            });
+            var concluiu = eventos.some(function (ev) {
+              return EVENTOS_DE_CONCLUSAO.indexOf(ev.tipo_evento) !== -1;
+            });
+            var indiceUltimoOnboarding = -1;
+            eventos.forEach(function (ev, i) {
+              if (ev.tipo_evento.indexOf("onboard_") === 0) indiceUltimoOnboarding = i;
+            });
+            // "Parou aqui": só faz sentido marcar quando teve pelo menos um passo de
+            // onboarding e nunca chegou na conclusão — senão toda visita comum (sem
+            // fluxo nenhum) ganharia o selo de abandono à toa.
+            var indiceOndeParou = teveOnboarding && !concluiu ? indiceUltimoOnboarding : -1;
+
+            return (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Quando</th>
+                    <th>LP</th>
+                    <th>Evento</th>
+                    <th>Rótulo</th>
+                    <th>Página</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {eventos.map(function (ev, i) {
+                    return (
+                      <tr key={i}>
+                        <td>{formatarData(ev.criado_em)}</td>
+                        <td>{ev.site_nome}</td>
+                        <td>
+                          {nomeAmigavelEvento(ev.tipo_evento)}
+                          {i === indiceOndeParou && <span className="selo-parou">parou aqui</span>}
+                        </td>
+                        <td>{ev.rotulo || "—"}</td>
+                        <td style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {ev.pagina || "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            );
+          })()}
 
           {respostasOnboarding && respostasOnboarding.length > 0 && (
             <div style={{ marginTop: 24 }}>
@@ -238,11 +370,9 @@ export default function Jornada() {
                   {respostasOnboarding.map(function (r, i) {
                     return (
                       <tr key={i}>
-                        <td>{formatarData(r.criado_em)}</td>
-                        <td>{nomeAmigavelEvento(r.passo)}</td>
-                        <td style={{ maxWidth: 420, whiteSpace: "pre-wrap" }}>
-                          {r.respostas ? JSON.stringify(r.respostas, null, 2) : "—"}
-                        </td>
+                        <td style={{ whiteSpace: "nowrap" }}>{formatarData(r.criado_em)}</td>
+                        <td style={{ whiteSpace: "nowrap" }}>{nomeAmigavelEvento(r.passo)}</td>
+                        <td style={{ maxWidth: 480 }}>{renderizarResposta(r.respostas)}</td>
                       </tr>
                     );
                   })}
