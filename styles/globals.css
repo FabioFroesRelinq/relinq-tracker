@@ -1063,7 +1063,7 @@ svg text { font-family: var(--fonte); }
 
 .funil-mini-linha {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 46px;
+  grid-template-columns: 62px minmax(0, 1fr) 46px;
   align-items: center;
   gap: 6px;
 }
@@ -1071,6 +1071,9 @@ svg text { font-family: var(--fonte); }
 .funil-mini-rotulo {
   font-size: 0.68rem;
   color: var(--texto-mudo);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .funil-mini-trilha {
@@ -1123,8 +1126,7 @@ svg text { font-family: var(--fonte); }
   font-size: 0.82rem;
 }
 
-.selo-parou,
-.selo-gargalo {
+.selo-parou {
   display: inline-flex;
   align-items: center;
   margin-left: 8px;
@@ -1134,6 +1136,21 @@ svg text { font-family: var(--fonte); }
   font-weight: 700;
   color: #fca5a5;
   background: rgba(248, 113, 113, 0.14);
+  white-space: nowrap;
+}
+
+.selo-gargalo {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--perigo);
   white-space: nowrap;
 }
 
