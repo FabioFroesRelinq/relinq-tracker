@@ -76,26 +76,34 @@ function corConclusao(pct) {
   return "#ef4444";
 }
 
-// Acha a etapa com a maior queda em relação à etapa anterior (a primeira
-// etapa fica de fora — não tem "anterior" pra comparar). Usado tanto pro
-// selo em cada visualização quanto pra frase-resumo acima do funil.
+function corAbandono(pct) {
+  if (pct >= 50) return "#ef4444";
+  if (pct >= 20) return "#eab308";
+  return "#22c55e";
+}
+
+// Acha a etapa onde mais gente parou de verdade: de quem chegou nessa
+// etapa, que % nunca concluiu o fluxo tendo essa etapa como a última que
+// viu (não quantos deixaram de "entrar" na etapa seguinte — a pessoa pode
+// muito bem ter lido a etapa inteira e simplesmente saído dali). Usado
+// tanto pro selo em cada visualização quanto pra frase-resumo acima do
+// funil.
 function calcularGargalo(etapas) {
   var pior = null;
   etapas.forEach(function (e, i) {
-    if (i === 0) return;
-    var anterior = etapas[i - 1].visitantes;
-    if (!anterior) return;
-    var pct = Math.min(100, (e.visitantes / anterior) * 100);
-    if (pior == null || pct < pior.pct) {
+    if (!e.visitantes) return;
+    var pct = Math.min(100, ((e.abandonos || 0) / e.visitantes) * 100);
+    if (pior == null || pct > pior.pct) {
       pior = { indice: i, pct: pct };
     }
   });
   return pior;
 }
 
-// Duas visões auxiliares da mesma coluna de números do funil: quanto dessa
-// etapa concluiu em relação à etapa anterior, e o tempo médio gasto nela
-// (na mesma escala entre etapas, pra dar pra comparar de olho quem trava).
+// Três visões auxiliares da mesma coluna de números do funil: quanto de
+// quem chegou nessa etapa abandonou tendo ela como a última que viu, quanto
+// concluiu em relação à etapa anterior, e o tempo médio gasto nela (nas
+// mesmas escalas entre etapas, pra dar pra comparar de olho quem trava).
 function FunilMini({ rotulo, pct, cor, valorTexto }) {
   return (
     <div className="funil-mini-linha">
@@ -483,7 +491,7 @@ export default function Onboarding() {
 
   var semDados = dados && dados.etapas && dados.etapas.length === 0;
   var rotularEtapa = dados ? criarRotuladorEtapas(dados.etapas) : nomeAmigavelEtapa;
-  var gargalo = dados && dados.etapas.length > 1 ? calcularGargalo(dados.etapas) : null;
+  var gargalo = dados && dados.etapas.length > 0 ? calcularGargalo(dados.etapas) : null;
   var comparando = !!compararCom;
   var outrosOnboards = sites.filter(function (s) {
     return s.slug !== siteSelecionado;
@@ -600,8 +608,8 @@ export default function Onboarding() {
 
             {!comparando && gargalo && (
               <p className="funil-insight">
-                ⚠ Maior gargalo: <strong>{rotularEtapa(dados.etapas[gargalo.indice].evento)}</strong> — só{" "}
-                {fmtPct1(gargalo.pct)} passa pra essa etapa vindo da anterior.
+                ⚠ Maior gargalo: <strong>{rotularEtapa(dados.etapas[gargalo.indice].evento)}</strong> —{" "}
+                {fmtPct1(gargalo.pct)} de quem chegou aqui saiu sem continuar pro próximo passo.
               </p>
             )}
 
@@ -611,6 +619,7 @@ export default function Onboarding() {
                   var pctTotal = dados.etapas[0].visitantes > 0 ? Math.min(100, (e.visitantes / dados.etapas[0].visitantes) * 100) : 0;
                   var anterior = i > 0 ? dados.etapas[i - 1].visitantes : null;
                   var passo = anterior ? Math.min(100, (e.visitantes / anterior) * 100) : null;
+                  var pctAbandono = e.visitantes > 0 ? Math.min(100, ((e.abandonos || 0) / e.visitantes) * 100) : 0;
                   var maiorTempo = Math.max(1, ...dados.etapas.map(function (x) { return x.tempoMedioSegundos || 0; }));
                   var pctTempo = e.tempoMedioSegundos ? (e.tempoMedioSegundos / maiorTempo) * 100 : 0;
                   return (
@@ -631,6 +640,7 @@ export default function Onboarding() {
                         <span className="funil-valor">{fmtN(e.visitantes)}</span>
                         <span className="funil-info">{fmtPct1(pctTotal)} do 1º passo</span>
                         <div className="funil-mini">
+                          <FunilMini rotulo="abandono" pct={pctAbandono} cor={corAbandono(pctAbandono)} valorTexto={fmtPct1(pctAbandono)} />
                           {passo != null && (
                             <FunilMini rotulo="conclusão" pct={passo} cor={corConclusao(passo)} valorTexto={fmtPct1(passo)} />
                           )}
