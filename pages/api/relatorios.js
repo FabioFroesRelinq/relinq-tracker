@@ -23,8 +23,11 @@ const COLUNAS_METRICAS = `
   COUNT(DISTINCT CASE WHEN tipo_evento = 'visita' AND dispositivo = 'mobile' THEN ${VID} END) AS mobile,
   COUNT(DISTINCT CASE WHEN tipo_evento = 'visita' AND dispositivo = 'desktop' THEN ${VID} END) AS desktop,
   COUNT(DISTINCT CASE WHEN tipo_evento = 'visita' AND dispositivo = 'tablet' THEN ${VID} END) AS tablet,
+  COUNT(DISTINCT CASE WHEN tipo_evento = 'visita' AND dispositivo = 'app_ios' THEN ${VID} END) AS app_ios,
+  COUNT(DISTINCT CASE WHEN tipo_evento = 'visita' AND dispositivo = 'app_android' THEN ${VID} END) AS app_android,
   COUNT(DISTINCT CASE WHEN tipo_evento = 'visita'
-    AND (dispositivo IS NULL OR dispositivo NOT IN ('mobile', 'desktop', 'tablet')) THEN ${VID} END) AS outro,
+    AND (dispositivo IS NULL OR dispositivo NOT IN ('mobile', 'desktop', 'tablet', 'app_ios', 'app_android'))
+    THEN ${VID} END) AS outro,
   COUNT(DISTINCT CASE WHEN tipo_evento = 'scroll_profundidade' AND valor = 25 THEN ${VID} END) AS scroll25,
   COUNT(DISTINCT CASE WHEN tipo_evento = 'scroll_profundidade' AND valor = 50 THEN ${VID} END) AS scroll50,
   COUNT(DISTINCT CASE WHEN tipo_evento = 'scroll_profundidade' AND valor = 75 THEN ${VID} END) AS scroll75,
@@ -97,6 +100,8 @@ function normalizarMetricas(r) {
       mobile: numero(linha.mobile),
       desktop: numero(linha.desktop),
       tablet: numero(linha.tablet),
+      app_ios: numero(linha.app_ios),
+      app_android: numero(linha.app_android),
       outro: numero(linha.outro),
     },
     scroll: {

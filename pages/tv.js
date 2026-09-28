@@ -400,7 +400,13 @@ export default function ModoTV() {
           return { chave: (e.pais || "") + e.estado, nome: nomeEstado(e.pais, e.estado), pct: Math.min(100, (e.visitantes / geo.visitantesComLocalizacao) * 100) };
         })
       : [];
-  var nomesDisp = { mobile: "Celular", desktop: "Computador", tablet: "Tablet" };
+  var nomesDisp = {
+    mobile: "Celular",
+    desktop: "Computador",
+    tablet: "Tablet",
+    app_ios: "App iOS",
+    app_android: "App Android",
+  };
 
   return (
     <div className={estilos.tv} onMouseMove={mostrarControles}>

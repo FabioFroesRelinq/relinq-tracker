@@ -81,7 +81,8 @@ Assim que o snippet acima está instalado, o tracker já captura sozinho:
   `utm_campaign`, `utm_content`, `utm_term`)
 - **Visitante único** — um ID anônimo salvo no navegador (`localStorage`),
   então recarregar a página não conta como visitante novo
-- **Dispositivo** — celular, tablet ou computador
+- **Dispositivo** — celular, tablet ou computador (apps nativos iOS/Android
+  entram à parte, ver seção "Apps nativos" mais abaixo)
 - **Profundidade de rolagem** — marcos de 25%, 50%, 75% e 100%
 - **Tempo na página** — segundos até a pessoa sair ou trocar de aba
 - **Taxa de rejeição** — % de visitantes que só viram a página e não
@@ -314,6 +315,47 @@ Na tag "Solicitação HTTP" vinculada ao trigger "Todos os Eventos - GA4":
 2. Confirme, no mesmo Preview, que a tag da Meta continua disparando
    normalmente, sem nenhuma mudança de comportamento.
 3. Só então publique a versão do container.
+
+---
+
+## Apps nativos (iOS/Android) — identificar de onde a pessoa acessou
+
+Quando o onboarding/fluxo roda em telas 100% nativas (Swift/Kotlin, sem
+WebView), não existe `tracker.js` rodando — então o próprio app precisa
+chamar `POST /api/track` diretamente, do mesmo jeito que o GTM server-side
+faz (ver seção acima), só que sem o header `x-gtm-secret` (esse caminho é
+só pra integrações servidor-a-servidor autenticadas; o app nativo usa o
+mesmo caminho do navegador, sem header extra).
+
+O que muda em relação ao `tracker.js` é só o campo `dispositivo`: em vez de
+deixar o tracker detectar (`mobile`/`tablet`/`desktop`, só existe pra web),
+o app manda um valor fixo:
+
+- `"app_ios"` — app nativo iOS
+- `"app_android"` — app nativo Android
+
+```json
+{
+  "site": "relinq-onboarding",
+  "evento": "visita",
+  "visitor_id": "uuid-gerado-e-guardado-pelo-app",
+  "dispositivo": "app_ios"
+}
+```
+
+- `visitor_id` deve ser um identificador estável por instalação (ex: um
+  UUID gerado uma vez e salvo localmente), do mesmo jeito que o
+  `localStorage` faz na web — é o que liga "visitou", "iniciou o
+  onboarding" e "concluiu" à mesma pessoa nos relatórios e no funil de
+  `/onboarding`.
+- Os outros eventos (`onboard_algumacoisa` pra cada tela, `quiz_finalizado`
+  na conclusão) seguem exatamente a mesma convenção da seção "Onboarding/quiz
+  de várias telas dentro do próprio app", só trocando quem dispara a
+  chamada HTTP (o app nativo, no lugar do `relinqTrackPasso` do JS).
+
+Com isso, o painel (pizza de dispositivo no "Painel por LP", seção
+"Dispositivo" em Relatórios, Modo TV) passa a mostrar **App iOS**, **App
+Android**, **Celular (web)** e **Computador** como categorias separadas.
 
 ---
 

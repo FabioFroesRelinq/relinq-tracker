@@ -70,9 +70,11 @@ function nomeAmigavelEvento(tipoEvento) {
 }
 
 function nomeAmigavelDispositivo(d) {
-  if (d === "mobile") return "Celular";
+  if (d === "mobile") return "Celular (web)";
   if (d === "tablet") return "Tablet";
   if (d === "desktop") return "Computador";
+  if (d === "app_ios") return "App iOS";
+  if (d === "app_android") return "App Android";
   return "Desconhecido";
 }
 
@@ -980,6 +982,8 @@ function GraficoPizza({ porDispositivo, totalVisitas }) {
     desktop: "#6366f1",
     mobile: "#06b6d4",
     tablet: "#f59e0b",
+    app_ios: "#a855f7",
+    app_android: "#22c55e",
     desconhecido: "#64748b",
   };
 
