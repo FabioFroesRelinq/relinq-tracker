@@ -154,6 +154,8 @@ export default async function handler(req, res) {
     utm_campaign,
     utm_content,
     utm_term,
+    respostas,      // opcional: conteúdo estruturado de uma etapa de onboarding (relinqTrackPasso),
+                     // guardado à parte em "onboarding_respostas" — não afeta a contagem do funil
   } = req.body || {};
 
   if (!site || !evento) {
@@ -227,6 +229,28 @@ export default async function handler(req, res) {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         valores
       );
+    }
+
+    // Conteúdo estruturado de uma etapa de onboarding (respostas de múltipla
+    // seleção, preço/duração, horário por dia da semana etc.) — guardado à
+    // parte, sem afetar a contagem do funil acima. Precisa de visitor_id pra
+    // ser possível cruzar com a jornada/funil depois.
+    if (respostas && visitor_id) {
+      try {
+        await pool.query(
+          `INSERT INTO onboarding_respostas (visitor_id, site_id, passo, respostas_json)
+           VALUES (?, ?, ?, ?)`,
+          [visitor_id, siteId, evento, JSON.stringify(respostas)]
+        );
+      } catch (erroRespostas) {
+        // Tabela ainda não existe (migration-8 não rodou) -> não falha o
+        // evento principal por causa disso, só avisa no log.
+        if (erroRespostas && erroRespostas.code === "ER_NO_SUCH_TABLE") {
+          console.error("Tabela 'onboarding_respostas' não existe — rode db/migration-8.sql no banco.");
+        } else {
+          console.error("Erro ao gravar respostas de onboarding:", erroRespostas);
+        }
+      }
     }
 
     return res.status(201).json({ ok: true });

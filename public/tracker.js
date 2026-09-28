@@ -61,6 +61,12 @@
  *    valor numérico (progresso/percentual) dentro do objeto do evento.
  *    Não precisa configurar nada a mais pra isso funcionar.
  *
+ * ONBOARDING/QUIZ DE VÁRIAS TELAS DENTRO DO PRÓPRIO APP (ex: o fluxo de
+ * configuração em app.relinqbeauty.com.br, sem troca de página entre os
+ * passos): use relinqTrackPasso('onboard_algumacoisa', { valor, rotulo,
+ * respostas }) a cada passo — ver a função enviarPasso mais abaixo pra
+ * detalhes e convenção de nomes. Isso alimenta a tela /onboarding do painel.
+ *
  * DESTINO COMPARTILHADO POR LPS DIFERENTES (ex: um único checkout que
  * recebe tráfego de duas ou mais LPs, cada uma com seu próprio link):
  * o parâmetro ?relinq_site=slug-da-lp na URL decide de qual LP é o
@@ -279,6 +285,40 @@
 
   function enviarComValor(evento, valor) {
     enviarPayload(montarPayload(evento, { valor: valor }));
+  }
+
+  /**
+   * Dispara uma etapa de um fluxo interno de várias telas dentro do PRÓPRIO
+   * app (ex: o onboarding/quiz de configuração em app.relinqbeauty.com.br,
+   * onde não há troca de página — só de "passo" dentro do mesmo JS).
+   *
+   * Convenção: use um nome de evento começando com "onboard_" (ex:
+   * "onboard_servicos") — qualquer evento com esse prefixo vira uma etapa
+   * do funil automaticamente na tela /onboarding do painel, na ordem em
+   * que mais visitantes passaram por elas. Ao concluir o fluxo inteiro,
+   * dispare "quiz_finalizado" (convenção já usada pra marcos do meio do
+   * funil que não são a venda em si).
+   *
+   * Uso:
+   *   relinqTrackPasso('onboard_servicos', {
+   *     valor: 14,                                  // segundos gastos nesse passo (opcional)
+   *     rotulo: 'Corte feminino, Hidratação',        // resposta curta, pra quebra no painel (opcional)
+   *     respostas: { selecionados: ['Corte feminino', 'Hidratação'] }, // resposta estruturada (opcional)
+   *   });
+   *
+   * "respostas" aceita qualquer objeto/array serializável em JSON — é o
+   * jeito certo de guardar coisas como múltipla seleção, preço/duração por
+   * serviço ou horário de atendimento por dia da semana, que não cabem
+   * como texto curto em "rotulo". Fica guardado à parte (tabela
+   * "onboarding_respostas"), sem afetar a contagem do funil.
+   */
+  function enviarPasso(evento, opcoes) {
+    opcoes = opcoes || {};
+    var extra = {};
+    if (opcoes.rotulo) extra.rotulo = opcoes.rotulo;
+    if (opcoes.valor !== undefined && opcoes.valor !== null) extra.valor = opcoes.valor;
+    if (opcoes.respostas !== undefined && opcoes.respostas !== null) extra.respostas = opcoes.respostas;
+    enviarPayload(montarPayload(evento, extra));
   }
 
   // --- Auto-detecção de CTAs (sem precisar de onclick="relinqTrack(...)") ---
@@ -775,6 +815,7 @@
   // Expõe funções globais pra disparar eventos manuais no HTML da LP
   window.relinqTrack = enviar;
   window.relinqTrackVideo = relinqTrackVideo;
+  window.relinqTrackPasso = enviarPasso;
 
   // --- Evento automático via parâmetro na URL ---
   // Útil pra ferramentas de terceiros (quiz builders, checkout, etc.) onde

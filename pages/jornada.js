@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import Shell from "../components/Shell";
 
 function nomeAmigavelEvento(tipoEvento) {
@@ -22,12 +23,25 @@ function formatarData(texto) {
 }
 
 export default function Jornada() {
+  const router = useRouter();
   const [busca, setBusca] = useState("");
   const [candidatos, setCandidatos] = useState(null);
   const [visitorAtual, setVisitorAtual] = useState(null);
   const [eventos, setEventos] = useState(null);
+  const [respostasOnboarding, setRespostasOnboarding] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
+
+  // Abre direto a jornada de um visitante quando a página é acessada com
+  // ?visitor_id=... na URL (ex: o link "Ver jornada" da tela /onboarding).
+  useEffect(
+    function () {
+      if (!router.isReady) return;
+      var id = router.query.visitor_id;
+      if (id && !visitorAtual) abrirVisitante(String(id));
+    },
+    [router.isReady, router.query.visitor_id]
+  );
 
   // IDs gerados pelo tracker.js seguem o formato v_<timestamp>_<aleatório>
   // (ex: v_muabo0k8_pnm4p1q7). Se o texto colado já bate com esse formato,
@@ -74,6 +88,7 @@ export default function Jornada() {
       })
       .then(function (dados) {
         setEventos(dados.eventos || []);
+        setRespostasOnboarding(dados.respostasOnboarding || []);
         setCarregando(false);
       })
       .catch(function () {
@@ -85,6 +100,7 @@ export default function Jornada() {
   function voltarBusca() {
     setVisitorAtual(null);
     setEventos(null);
+    setRespostasOnboarding(null);
   }
 
   return (
@@ -202,6 +218,37 @@ export default function Jornada() {
                 })}
               </tbody>
             </table>
+          )}
+
+          {respostasOnboarding && respostasOnboarding.length > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <h2>Respostas do onboarding</h2>
+              <p className="vazio" style={{ marginBottom: 16 }}>
+                Conteúdo completo enviado via relinqTrackPasso(..., {"{"} respostas {"}"}) em cada etapa.
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Quando</th>
+                    <th>Etapa</th>
+                    <th>Resposta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {respostasOnboarding.map(function (r, i) {
+                    return (
+                      <tr key={i}>
+                        <td>{formatarData(r.criado_em)}</td>
+                        <td>{nomeAmigavelEvento(r.passo)}</td>
+                        <td style={{ maxWidth: 420, whiteSpace: "pre-wrap" }}>
+                          {r.respostas ? JSON.stringify(r.respostas, null, 2) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
