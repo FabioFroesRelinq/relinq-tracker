@@ -1123,7 +1123,8 @@ svg text { font-family: var(--fonte); }
   font-size: 0.82rem;
 }
 
-.selo-parou {
+.selo-parou,
+.selo-gargalo {
   display: inline-flex;
   align-items: center;
   margin-left: 8px;
@@ -1134,6 +1135,23 @@ svg text { font-family: var(--fonte); }
   color: #fca5a5;
   background: rgba(248, 113, 113, 0.14);
   white-space: nowrap;
+}
+
+.funil-insight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.86rem;
+  color: var(--texto-medio);
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+}
+
+.funil-insight strong {
+  color: var(--texto-forte);
 }
 
 /* --- Comparativo (conclusão x tempo médio por etapa) --- */
