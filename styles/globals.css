@@ -1026,15 +1026,84 @@ svg text { font-family: var(--fonte); }
 
 .funil-etapa {
   display: grid;
-  grid-template-columns: 170px minmax(0, 1fr) 190px;
+  grid-template-columns: 170px minmax(0, 1fr) 230px;
   align-items: center;
   gap: 16px;
+}
+
+.funil-nome-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
 
 .funil-nome {
   font-size: 0.92rem;
   font-weight: 600;
   color: var(--texto-medio);
+}
+
+.funil-nome-original {
+  font-size: 0.72rem;
+  color: var(--texto-mudo);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Mini barras de apoio (conclusão da etapa anterior / tempo médio),
+   dentro da coluna de números do funil. */
+.funil-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.funil-mini-linha {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 46px;
+  align-items: center;
+  gap: 6px;
+}
+
+.funil-mini-rotulo {
+  font-size: 0.68rem;
+  color: var(--texto-mudo);
+}
+
+.funil-mini-trilha {
+  background: var(--superficie-3);
+  border-radius: 6px;
+  height: 6px;
+  overflow: hidden;
+}
+
+.funil-mini-preenchimento {
+  height: 100%;
+  min-width: 3px;
+  border-radius: 6px;
+  transition: width 0.4s ease;
+}
+
+.funil-mini-valor {
+  font-size: 0.7rem;
+  color: var(--texto-mudo);
+  text-align: right;
+}
+
+/* --- Comparativo (conclusão x tempo médio por etapa) --- */
+.comparativo-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+}
+
+@media (max-width: 900px) {
+  .comparativo-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .funil-trilha {

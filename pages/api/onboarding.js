@@ -58,11 +58,34 @@ export default async function handler(req, res) {
     });
 
     // --- Quem iniciou (qualquer evento onboard_*) e quem concluiu (quiz_finalizado) ---
+    // --- Quem visitou a página (mesmo sem chegar a iniciar o fluxo) ---
+    // Vem do evento "visita" que o tracker.js já dispara sozinho em toda
+    // página, então não exige nada novo instalado no app.
+    const [[{ visitaram }]] = await pool.query(
+      `SELECT COUNT(DISTINCT visitor_id) AS visitaram
+       FROM events
+       WHERE ${condSiteId}criado_em BETWEEN ? AND ? AND tipo_evento = 'visita' AND visitor_id IS NOT NULL`,
+      filtroData
+    );
+
     const [[{ iniciaram }]] = await pool.query(
       `SELECT COUNT(DISTINCT visitor_id) AS iniciaram
        FROM events
        WHERE ${condSiteId}criado_em BETWEEN ? AND ? AND tipo_evento LIKE 'onboard\\_%' AND visitor_id IS NOT NULL`,
       filtroData
+    );
+
+    // --- De quem visitou, quantos nunca chegaram a disparar um passo do
+    // fluxo — a "taxa de rejeição de início" (bounce antes do 1º passo).
+    const [[{ visitaramSemIniciar }]] = await pool.query(
+      `SELECT COUNT(DISTINCT e.visitor_id) AS visitaramSemIniciar
+       FROM events e
+       WHERE ${condSiteId}e.criado_em BETWEEN ? AND ? AND e.tipo_evento = 'visita' AND e.visitor_id IS NOT NULL
+         AND e.visitor_id NOT IN (
+           SELECT visitor_id FROM events
+           WHERE ${condSiteId}criado_em BETWEEN ? AND ? AND tipo_evento LIKE 'onboard\\_%' AND visitor_id IS NOT NULL
+         )`,
+      [...filtroData, ...filtroData]
     );
 
     const [[{ concluiram }]] = await pool.query(
@@ -77,6 +100,7 @@ export default async function handler(req, res) {
     );
 
     const taxaConclusao = iniciaram > 0 ? Number(((concluiram / iniciaram) * 100).toFixed(1)) : 0;
+    const taxaRejeicaoInicio = visitaram > 0 ? Number(((visitaramSemIniciar / visitaram) * 100).toFixed(1)) : 0;
 
     // --- Respostas curtas rotuladas (ex: "Como nos conheceu" -> "Instagram") ---
     const [respostasRotulo] = await pool.query(
@@ -171,9 +195,11 @@ export default async function handler(req, res) {
     return res.status(200).json({
       periodo: { inicio, fim },
       etapas,
+      visitaram: Number(visitaram) || 0,
       iniciaram: Number(iniciaram) || 0,
       concluiram: Number(concluiram) || 0,
       taxaConclusao,
+      taxaRejeicaoInicio,
       respostasRotulo,
       abandonos,
       respostas,
