@@ -8,7 +8,7 @@ import EstadoVazio from "../components/EstadoVazio";
 import Esqueleto from "../components/Esqueleto";
 import Icone from "../components/Icones";
 import { PontoLP } from "../components/coresLP";
-import { lerSiteInicial, salvarSite, lerPeriodoInicial, salvarPeriodo } from "../lib/filtroUrl";
+import { lerSelecionadosInicial, salvarSelecionados, lerPeriodoInicial, salvarPeriodo } from "../lib/filtroUrl";
 
 const nf = new Intl.NumberFormat("pt-BR");
 const nf1 = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -255,11 +255,128 @@ function SeletorVisualizacaoFunil({ valor, aoMudar }) {
   );
 }
 
+var CORES_COMPARACAO = ["#6366f1", "#06b6d4", "#f59e0b", "#22c55e", "#a78bfa", "#f43f5e"];
+
+// Tabela compacta com os KPIs de cada onboard lado a lado.
+function TabelaComparacaoKpis({ porSite }) {
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Onboard</th>
+          <th style={{ textAlign: "right" }}>Visitaram</th>
+          <th style={{ textAlign: "right" }}>Rejeição de início</th>
+          <th style={{ textAlign: "right" }}>Iniciaram</th>
+          <th style={{ textAlign: "right" }}>Concluíram</th>
+          <th style={{ textAlign: "right" }}>Taxa de conclusão</th>
+        </tr>
+      </thead>
+      <tbody>
+        {porSite.map(function (s, i) {
+          var cor = CORES_COMPARACAO[i % CORES_COMPARACAO.length];
+          return (
+            <tr key={s.slug}>
+              <td>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: cor, display: "inline-block", flexShrink: 0 }} />
+                  {s.nome}
+                </span>
+              </td>
+              <td style={{ textAlign: "right" }}>{fmtN(s.visitaram)}</td>
+              <td style={{ textAlign: "right" }}>{fmtPct1(s.taxaRejeicaoInicio)}</td>
+              <td style={{ textAlign: "right" }}>{fmtN(s.iniciaram)}</td>
+              <td style={{ textAlign: "right" }}>{fmtN(s.concluiram)}</td>
+              <td style={{ textAlign: "right" }}>{fmtPct1(s.taxaConclusao)}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+// Funil por posição: como os onboards podem ter etapas com nomes/conteúdo
+// diferentes, compara "1ª tela de A" com "1ª tela de B" pela posição em que
+// aparecem em cada funil — não pelo nome técnico do evento, que pode nem
+// existir do outro lado.
+function FunilPorPosicao({ porSite }) {
+  var maxPosicoes = Math.max(0, ...porSite.map(function (s) { return s.etapas.length; }));
+  var posicoes = [];
+  for (var i = 0; i < maxPosicoes; i++) posicoes.push(i);
+
+  if (posicoes.length === 0) {
+    return <p className="vazio">Nenhum dos onboards selecionados teve etapas nesse período.</p>;
+  }
+
+  return (
+    <div>
+      {posicoes.map(function (i) {
+        return (
+          <div key={i} style={{ marginBottom: 20 }}>
+            <h3 className="grafico-subtitulo">{rotuloTela(i)}</h3>
+            <div className="barras-h">
+              {porSite.map(function (s, idx) {
+                var etapa = s.etapas[i];
+                var cor = CORES_COMPARACAO[idx % CORES_COMPARACAO.length];
+                if (!etapa) {
+                  return (
+                    <div className="barra-h-linha" key={s.slug}>
+                      <span className="barra-h-rotulo" title={s.nome}>
+                        {s.nome}
+                      </span>
+                      <div className="barra-h-trilha" />
+                      <span className="barra-h-valor">sem essa tela</span>
+                    </div>
+                  );
+                }
+                var anterior = i > 0 ? s.etapas[i - 1] : null;
+                var pct =
+                  anterior && anterior.visitantes > 0 ? Math.min(100, (etapa.visitantes / anterior.visitantes) * 100) : 100;
+                return (
+                  <div className="barra-h-linha" key={s.slug}>
+                    <span className="barra-h-rotulo" title={s.nome + " — " + nomeAmigavelEtapa(etapa.evento)}>
+                      {s.nome}
+                    </span>
+                    <div className="barra-h-trilha">
+                      <div className="barra-h-preenchimento" style={{ width: Math.max(pct, 2) + "%", background: cor }} />
+                    </div>
+                    <span className="barra-h-valor">{fmtPct1(pct)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ComparacaoOnboards({ porSite }) {
+  if (!porSite || porSite.length === 0) {
+    return <EstadoVazio titulo="Nenhum onboard encontrado" texto="Confira se os onboards selecionados têm dados nesse período." />;
+  }
+
+  return (
+    <>
+      <Secao id="comparacao-kpis" titulo="KPIs por onboard" aberta aoAlternar={function () {}}>
+        <TabelaComparacaoKpis porSite={porSite} />
+      </Secao>
+
+      <Secao id="comparacao-funil" titulo="Funil por posição da etapa" aberta aoAlternar={function () {}}>
+        <FunilPorPosicao porSite={porSite} />
+      </Secao>
+    </>
+  );
+}
+
 export default function Onboarding() {
   const router = useRouter();
 
   const [sites, setSites] = useState([]);
-  const [siteSelecionado, setSiteSelecionado] = useState("todas");
+  // Vazio = "Todas as LPs"; 1 slug = onboard único (comportamento de sempre);
+  // 2+ slugs = modo comparação (funil lado a lado, por posição da etapa).
+  const [selecionados, setSelecionados] = useState([]);
   const [dataInicio, setDataInicio] = useState(formatarData(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
   const [dataFim, setDataFim] = useState(formatarData(new Date()));
   const [filtroHidratado, setFiltroHidratado] = useState(false);
@@ -270,8 +387,7 @@ export default function Onboarding() {
   useEffect(
     function () {
       if (!router.isReady || filtroHidratado) return;
-      var slugPreferido = router.query.site || lerSiteInicial(router.query);
-      if (slugPreferido) setSiteSelecionado(slugPreferido);
+      setSelecionados(lerSelecionadosInicial(router.query));
       var p = lerPeriodoInicial(router.query, dataInicio, dataFim);
       if (p.inicio !== dataInicio) setDataInicio(p.inicio);
       if (p.fim !== dataFim) setDataFim(p.fim);
@@ -283,13 +399,26 @@ export default function Onboarding() {
   useEffect(
     function () {
       if (!filtroHidratado) return;
-      salvarSite(siteSelecionado);
+      salvarSelecionados(selecionados);
       salvarPeriodo(dataInicio, dataFim);
-      var query = Object.assign({}, router.query, { site: siteSelecionado, inicio: dataInicio, fim: dataFim });
+      var query = Object.assign({}, router.query, { inicio: dataInicio, fim: dataFim });
+      delete query.site;
+      if (selecionados.length > 0) query.lps = selecionados.join(",");
+      else delete query.lps;
       router.replace({ pathname: router.pathname, query: query }, undefined, { shallow: true });
     },
-    [siteSelecionado, dataInicio, dataFim]
+    [selecionados, dataInicio, dataFim]
   );
+
+  function alternarSite(slug) {
+    setSelecionados(function (atual) {
+      return atual.indexOf(slug) >= 0
+        ? atual.filter(function (s) {
+            return s !== slug;
+          })
+        : atual.concat(slug);
+    });
+  }
 
   useEffect(function () {
     fetch("/api/sites")
@@ -302,12 +431,17 @@ export default function Onboarding() {
       .catch(function () {});
   }, []);
 
+  var modoComparacao = selecionados.length >= 2;
+
   useEffect(
     function () {
       if (!filtroHidratado || dataInicio > dataFim) return;
       var cancelado = false;
       setCarregando(true);
-      fetch("/api/onboarding?site=" + siteSelecionado + "&inicio=" + dataInicio + "&fim=" + dataFim)
+      var url = modoComparacao
+        ? "/api/onboarding?sites=" + selecionados.map(encodeURIComponent).join(",") + "&inicio=" + dataInicio + "&fim=" + dataFim
+        : "/api/onboarding?site=" + (selecionados[0] || "todas") + "&inicio=" + dataInicio + "&fim=" + dataFim;
+      fetch(url)
         .then(function (r) {
           return r.json();
         })
@@ -324,7 +458,7 @@ export default function Onboarding() {
         cancelado = true;
       };
     },
-    [siteSelecionado, dataInicio, dataFim, filtroHidratado]
+    [selecionados, modoComparacao, dataInicio, dataFim, filtroHidratado]
   );
 
   function aplicarAtalho(dias) {
@@ -337,35 +471,46 @@ export default function Onboarding() {
     infoSites[s.slug] = s;
   });
 
-  var semDados = dados && dados.etapas && dados.etapas.length === 0;
-  var rotularEtapa = dados ? criarRotuladorEtapas(dados.etapas) : nomeAmigavelEtapa;
-  var gargalo = dados && dados.etapas.length > 1 ? calcularGargalo(dados.etapas) : null;
+  var semDados = !modoComparacao && dados && dados.etapas && dados.etapas.length === 0;
+  var rotularEtapa = dados && !modoComparacao ? criarRotuladorEtapas(dados.etapas) : nomeAmigavelEtapa;
+  var gargalo = dados && !modoComparacao && dados.etapas.length > 1 ? calcularGargalo(dados.etapas) : null;
 
   return (
     <Shell
       titulo="Onboarding"
       subtitulo="Funil, tempo por etapa e respostas de fluxos internos do app (ex: o onboarding de configuração)"
-      filtro={{ site: siteSelecionado === "todas" ? "" : siteSelecionado, inicio: dataInicio, fim: dataFim }}
+      filtro={{ lps: selecionados, inicio: dataInicio, fim: dataFim }}
     >
       <div className="barra-filtros">
-        <div className="filtros">
-          <span className="select-lp">
-            <select
-              value={siteSelecionado}
-              onChange={function (e) {
-                setSiteSelecionado(e.target.value);
+        <div className="filtros" style={{ flexWrap: "wrap" }}>
+          <div className="chips" role="group" aria-label="Selecionar onboards">
+            <button
+              type="button"
+              className={"chip" + (selecionados.length === 0 ? " chip-ativo" : "")}
+              aria-pressed={selecionados.length === 0}
+              onClick={function () {
+                setSelecionados([]);
               }}
             >
-              <option value="todas">Todas as LPs</option>
-              {sites.map(function (s) {
-                return (
-                  <option key={s.slug} value={s.slug}>
-                    {s.nome}
-                  </option>
-                );
-              })}
-            </select>
-          </span>
+              Todas as LPs
+            </button>
+            {sites.map(function (s) {
+              var ativo = selecionados.indexOf(s.slug) >= 0;
+              return (
+                <button
+                  type="button"
+                  key={s.slug}
+                  className={"chip" + (ativo ? " chip-ativo" : "")}
+                  aria-pressed={ativo}
+                  onClick={function () {
+                    alternarSite(s.slug);
+                  }}
+                >
+                  {s.nome}
+                </button>
+              );
+            })}
+          </div>
           <input type="date" value={dataInicio} onChange={function (e) { setDataInicio(e.target.value); }} />
           <input type="date" value={dataFim} onChange={function (e) { setDataFim(e.target.value); }} />
           <div className="atalhos">
@@ -374,11 +519,25 @@ export default function Onboarding() {
             <button className="btn-atalho" onClick={function () { aplicarAtalho(90); }}>90 dias</button>
           </div>
         </div>
+        {modoComparacao && (
+          <p className="valor-secundario" style={{ marginTop: 10 }}>
+            Comparando {selecionados.length} onboards — o funil é mostrado por posição da etapa ("Tela 01", "Tela
+            02"...), já que os passos podem ter nomes diferentes entre eles.
+          </p>
+        )}
       </div>
 
       {carregando && <Esqueleto cartoes={5} secoes={2} />}
 
-      {!carregando && semDados && (
+      {!carregando && modoComparacao && dados && dados.modo === "comparacao" && (
+        <ComparacaoOnboards porSite={dados.porSite} />
+      )}
+
+      {!carregando && modoComparacao && dados && dados.erro && (
+        <EstadoVazio titulo="Não deu pra comparar" texto={dados.erro} />
+      )}
+
+      {!carregando && !modoComparacao && semDados && (
         <EstadoVazio
           titulo="Nenhuma etapa de onboarding nesse período"
           texto={
@@ -387,7 +546,7 @@ export default function Onboarding() {
         />
       )}
 
-      {!carregando && dados && !semDados && (
+      {!carregando && !modoComparacao && dados && !semDados && (
         <>
           <div className="cards">
             <CartaoKpi rotulo="Visitaram" valor={fmtN(dados.visitaram)} acento="#94a3b8" />

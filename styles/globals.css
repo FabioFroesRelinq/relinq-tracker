@@ -275,6 +275,41 @@ h1, h2, h3 {
   cursor: default;
 }
 
+/* --- Chips de seleção múltipla (ex: onboards a comparar em /onboarding) --- */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--borda-forte);
+  background: var(--superficie-2);
+  color: var(--texto-medio);
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.chip:hover {
+  border-color: var(--primaria);
+  color: var(--texto-forte);
+}
+
+.chip-ativo,
+.chip-ativo:hover {
+  background: var(--primaria);
+  border-color: var(--primaria);
+  color: #fff;
+}
+
 .btn {
   font-family: inherit;
   margin-top: 18px;

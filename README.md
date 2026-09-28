@@ -203,6 +203,16 @@ relinqTrack('quiz_finalizado');
   pra decidir quem "abandonou" (teve algum passo, mas nunca chegou nesse
   evento).
 
+### Comparando dois ou mais onboards
+
+Quando existe mais de um fluxo de onboarding cadastrado (cada um como uma
+LP/site diferente), selecionar **2 ou mais** nos chips do topo da tela
+`/onboarding` troca a visão pra um modo de comparação: uma tabela com os
+KPIs de cada onboard lado a lado, e o funil comparado **por posição da
+etapa** ("Tela 01", "Tela 02"...) em vez do nome técnico do evento — assim
+dá pra comparar "a 1ª tela do onboard A" com "a 1ª tela do onboard B" mesmo
+que o conteúdo de cada uma seja completamente diferente entre os fluxos.
+
 ---
 
 ## Ferramentas de terceiros (quiz builders, checkout, etc.)
