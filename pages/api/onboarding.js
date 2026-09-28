@@ -27,11 +27,37 @@ async function calcularFunilDoSite(pool, siteId, inicio, fim) {
      ORDER BY visitantes DESC`,
     filtroData
   );
+
+  // --- Abandono POR etapa: de quem nunca concluiu o fluxo, qual foi a
+  // última etapa que a pessoa viu antes de sumir (não a próxima pra onde
+  // ela não foi). É essa contagem — não a diferença de visitantes entre
+  // etapas consecutivas — que decide o "maior gargalo" no front-end.
+  const [abandonosPorEtapaBrutos] = await pool.query(
+    `SELECT ultimo_passo, COUNT(*) AS total
+     FROM (
+       SELECT e.visitor_id,
+              SUBSTRING_INDEX(GROUP_CONCAT(e.tipo_evento ORDER BY e.criado_em DESC), ',', 1) AS ultimo_passo
+       FROM events e
+       WHERE ${condSiteId}e.criado_em BETWEEN ? AND ? AND e.tipo_evento LIKE 'onboard\\_%' AND e.visitor_id IS NOT NULL
+         AND e.visitor_id NOT IN (
+           SELECT visitor_id FROM events WHERE tipo_evento = 'quiz_finalizado' AND visitor_id IS NOT NULL
+         )
+       GROUP BY e.visitor_id
+     ) por_visitante
+     GROUP BY ultimo_passo`,
+    filtroData
+  );
+  const abandonosPorEtapa = {};
+  abandonosPorEtapaBrutos.forEach(function (l) {
+    abandonosPorEtapa[l.ultimo_passo] = Number(l.total) || 0;
+  });
+
   const etapas = etapasBrutas.map(function (l) {
     return {
       evento: l.tipo_evento,
       visitantes: Number(l.visitantes) || 0,
       tempoMedioSegundos: l.tempo_medio_segundos ? Math.round(l.tempo_medio_segundos) : null,
+      abandonos: abandonosPorEtapa[l.tipo_evento] || 0,
     };
   });
 
