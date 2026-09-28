@@ -76,6 +76,23 @@ function corConclusao(pct) {
   return "#ef4444";
 }
 
+// Acha a etapa com a maior queda em relação à etapa anterior (a primeira
+// etapa fica de fora — não tem "anterior" pra comparar). Usado tanto pro
+// selo em cada visualização quanto pra frase-resumo acima do funil.
+function calcularGargalo(etapas) {
+  var pior = null;
+  etapas.forEach(function (e, i) {
+    if (i === 0) return;
+    var anterior = etapas[i - 1].visitantes;
+    if (!anterior) return;
+    var pct = Math.min(100, (e.visitantes / anterior) * 100);
+    if (pior == null || pct < pior.pct) {
+      pior = { indice: i, pct: pct };
+    }
+  });
+  return pior;
+}
+
 // Duas visões auxiliares da mesma coluna de números do funil: quanto dessa
 // etapa concluiu em relação à etapa anterior, e o tempo médio gasto nela
 // (na mesma escala entre etapas, pra dar pra comparar de olho quem trava).
@@ -93,7 +110,7 @@ function FunilMini({ rotulo, pct, cor, valorTexto }) {
 
 // Gráfico de colunas alternativo ao funil de barras: visitantes por etapa,
 // na mesma ordem, pra quem prefere comparar volumes lado a lado.
-function GraficoColunasEtapas({ etapas, rotularEtapa }) {
+function GraficoColunasEtapas({ etapas, rotularEtapa, indiceGargalo }) {
   var largura = 1200;
   var altura = 340;
   var margem = { topo: 26, baixo: 70, esq: 60, dir: 20 };
@@ -116,6 +133,10 @@ function GraficoColunasEtapas({ etapas, rotularEtapa }) {
           <stop offset="0%" stopColor="#6366f1" stopOpacity="1" />
           <stop offset="100%" stopColor="#6366f1" stopOpacity="0.55" />
         </linearGradient>
+        <linearGradient id="col-onboarding-grad-gargalo" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ef4444" stopOpacity="1" />
+          <stop offset="100%" stopColor="#ef4444" stopOpacity="0.55" />
+        </linearGradient>
       </defs>
       <line x1={margem.esq} y1={margem.topo + areaAltura} x2={largura - margem.dir} y2={margem.topo + areaAltura} stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
       {etapas.map(function (e, i) {
@@ -124,14 +145,27 @@ function GraficoColunasEtapas({ etapas, rotularEtapa }) {
         var alturaBarra = margem.topo + areaAltura - y;
         var centroX = x + larguraBarra / 2;
         var baseY = margem.topo + areaAltura + 22;
+        var ehGargalo = i === indiceGargalo;
         return (
           <g key={e.evento}>
-            <title>{rotularEtapa(e.evento) + ": " + e.visitantes + " visitantes"}</title>
-            <rect x={x} y={y} width={larguraBarra} height={Math.max(alturaBarra, 0)} rx={4} fill="url(#col-onboarding-grad)" />
+            <title>{rotularEtapa(e.evento) + ": " + e.visitantes + " visitantes" + (ehGargalo ? " — maior gargalo" : "")}</title>
+            <rect
+              x={x}
+              y={y}
+              width={larguraBarra}
+              height={Math.max(alturaBarra, 0)}
+              rx={4}
+              fill={ehGargalo ? "url(#col-onboarding-grad-gargalo)" : "url(#col-onboarding-grad)"}
+            />
+            {ehGargalo && (
+              <text x={centroX} y={y - 24} fontSize="18" textAnchor="middle">
+                ⚠
+              </text>
+            )}
             <text x={centroX} y={y - 8} fontSize="16" fill="#cbd5e1" textAnchor="middle">
               {e.visitantes}
             </text>
-            <text x={centroX} y={baseY} fontSize="15" fill="#94a3b8" textAnchor="middle">
+            <text x={centroX} y={baseY} fontSize="15" fill={ehGargalo ? "#ef4444" : "#94a3b8"} fontWeight={ehGargalo ? "700" : "400"} textAnchor="middle">
               {rotularEtapa(e.evento)}
             </text>
           </g>
@@ -144,7 +178,7 @@ function GraficoColunasEtapas({ etapas, rotularEtapa }) {
 // Segunda visão: em vez de volume, compara diretamente conclusão da etapa
 // anterior (%) e tempo médio gasto — as duas métricas que o funil de barras
 // só mostrava em texto pequeno.
-function GraficoComparativoEtapas({ etapas, rotularEtapa }) {
+function GraficoComparativoEtapas({ etapas, rotularEtapa, indiceGargalo }) {
   var maiorTempo = Math.max(1, ...etapas.map(function (e) { return e.tempoMedioSegundos || 0; }));
 
   return (
@@ -155,10 +189,12 @@ function GraficoComparativoEtapas({ etapas, rotularEtapa }) {
           {etapas.map(function (e, i) {
             var anterior = i > 0 ? etapas[i - 1].visitantes : null;
             var pct = anterior ? Math.min(100, (e.visitantes / anterior) * 100) : 100;
+            var ehGargalo = i === indiceGargalo;
             return (
               <div className="barra-h-linha" key={e.evento}>
                 <span className="barra-h-rotulo" title={nomeAmigavelEtapa(e.evento)}>
                   {rotularEtapa(e.evento)}
+                  {ehGargalo && <span className="selo-gargalo">maior gargalo</span>}
                 </span>
                 <div className="barra-h-trilha">
                   <div className="barra-h-preenchimento" style={{ width: Math.max(pct, 2) + "%", background: corConclusao(pct) }} />
@@ -303,6 +339,7 @@ export default function Onboarding() {
 
   var semDados = dados && dados.etapas && dados.etapas.length === 0;
   var rotularEtapa = dados ? criarRotuladorEtapas(dados.etapas) : nomeAmigavelEtapa;
+  var gargalo = dados && dados.etapas.length > 1 ? calcularGargalo(dados.etapas) : null;
 
   return (
     <Shell
@@ -367,6 +404,13 @@ export default function Onboarding() {
             aoAlternar={function () {}}
             extra={<SeletorVisualizacaoFunil valor={visualizacaoFunil} aoMudar={setVisualizacaoFunil} />}
           >
+            {gargalo && (
+              <p className="funil-insight">
+                ⚠ Maior gargalo: <strong>{rotularEtapa(dados.etapas[gargalo.indice].evento)}</strong> — só{" "}
+                {fmtPct1(gargalo.pct)} passa pra essa etapa vindo da anterior.
+              </p>
+            )}
+
             {visualizacaoFunil === "funil" && (
               <div className="funil">
                 {dados.etapas.map(function (e, i) {
@@ -378,7 +422,10 @@ export default function Onboarding() {
                   return (
                     <div className="funil-etapa" key={e.evento}>
                       <div className="funil-nome-wrap">
-                        <span className="funil-nome">{rotularEtapa(e.evento)}</span>
+                        <span className="funil-nome">
+                          {rotularEtapa(e.evento)}
+                          {gargalo && i === gargalo.indice && <span className="selo-gargalo">maior gargalo</span>}
+                        </span>
                         <span className="funil-nome-original" title={nomeAmigavelEtapa(e.evento)}>
                           {nomeAmigavelEtapa(e.evento)}
                         </span>
@@ -404,10 +451,12 @@ export default function Onboarding() {
               </div>
             )}
 
-            {visualizacaoFunil === "colunas" && <GraficoColunasEtapas etapas={dados.etapas} rotularEtapa={rotularEtapa} />}
+            {visualizacaoFunil === "colunas" && (
+              <GraficoColunasEtapas etapas={dados.etapas} rotularEtapa={rotularEtapa} indiceGargalo={gargalo ? gargalo.indice : -1} />
+            )}
 
             {visualizacaoFunil === "comparativo" && (
-              <GraficoComparativoEtapas etapas={dados.etapas} rotularEtapa={rotularEtapa} />
+              <GraficoComparativoEtapas etapas={dados.etapas} rotularEtapa={rotularEtapa} indiceGargalo={gargalo ? gargalo.indice : -1} />
             )}
 
             <p className="valor-secundario" style={{ marginTop: 14 }}>
