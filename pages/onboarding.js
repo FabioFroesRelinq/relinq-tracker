@@ -6,6 +6,7 @@ import Secao from "../components/Secao";
 import CartaoKpi from "../components/CartaoKpi";
 import EstadoVazio from "../components/EstadoVazio";
 import Esqueleto from "../components/Esqueleto";
+import Icone from "../components/Icones";
 import { PontoLP } from "../components/coresLP";
 import { lerSiteInicial, salvarSite, lerPeriodoInicial, salvarPeriodo } from "../lib/filtroUrl";
 
@@ -47,6 +48,177 @@ function nomeAmigavelEtapa(evento) {
   return semPrefixo.charAt(0).toUpperCase() + semPrefixo.slice(1);
 }
 
+// Nome exibido pro visitante do painel: "Tela 01", "Tela 02"... na ordem em
+// que as etapas aparecem no funil (a ordem já vem ajustada por quantos
+// visitantes chegaram em cada uma). O nome técnico do evento continua
+// disponível junto, pra não perder a referência de qual passo é qual.
+function rotuloTela(indice) {
+  return "Tela " + String(indice + 1).padStart(2, "0");
+}
+
+// Some "onboard_*" não tem posição no funil da página atual (ex: chave de
+// "onboarding_respostas" que não bate com nenhum tipo_evento visto no
+// período) — nesse caso cai pro nome técnico legível, só como reserva.
+function criarRotuladorEtapas(etapas) {
+  var indicePorEvento = {};
+  etapas.forEach(function (e, i) {
+    indicePorEvento[e.evento] = i;
+  });
+  return function (evento) {
+    var indice = indicePorEvento[evento];
+    return indice != null ? rotuloTela(indice) : nomeAmigavelEtapa(evento);
+  };
+}
+
+function corConclusao(pct) {
+  if (pct >= 80) return "#22c55e";
+  if (pct >= 50) return "#eab308";
+  return "#ef4444";
+}
+
+// Duas visões auxiliares da mesma coluna de números do funil: quanto dessa
+// etapa concluiu em relação à etapa anterior, e o tempo médio gasto nela
+// (na mesma escala entre etapas, pra dar pra comparar de olho quem trava).
+function FunilMini({ rotulo, pct, cor, valorTexto }) {
+  return (
+    <div className="funil-mini-linha">
+      <span className="funil-mini-rotulo">{rotulo}</span>
+      <div className="funil-mini-trilha">
+        <div className="funil-mini-preenchimento" style={{ width: Math.max(Math.min(pct, 100), 2) + "%", background: cor }} />
+      </div>
+      <span className="funil-mini-valor">{valorTexto}</span>
+    </div>
+  );
+}
+
+// Gráfico de colunas alternativo ao funil de barras: visitantes por etapa,
+// na mesma ordem, pra quem prefere comparar volumes lado a lado.
+function GraficoColunasEtapas({ etapas, rotularEtapa }) {
+  var largura = 1200;
+  var altura = 340;
+  var margem = { topo: 26, baixo: 70, esq: 60, dir: 20 };
+  var areaLargura = largura - margem.esq - margem.dir;
+  var areaAltura = altura - margem.topo - margem.baixo;
+
+  var maiorValor = Math.max(1, ...etapas.map(function (e) { return e.visitantes; }));
+  var n = etapas.length;
+  var larguraGrupo = areaLargura / n;
+  var larguraBarra = Math.max(10, Math.min(70, larguraGrupo * 0.5));
+
+  function coordY(valor) {
+    return margem.topo + areaAltura - (valor / maiorValor) * areaAltura;
+  }
+
+  return (
+    <svg viewBox={"0 0 " + largura + " " + altura} style={{ width: "100%", height: "auto", display: "block" }}>
+      <defs>
+        <linearGradient id="col-onboarding-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#6366f1" stopOpacity="1" />
+          <stop offset="100%" stopColor="#6366f1" stopOpacity="0.55" />
+        </linearGradient>
+      </defs>
+      <line x1={margem.esq} y1={margem.topo + areaAltura} x2={largura - margem.dir} y2={margem.topo + areaAltura} stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+      {etapas.map(function (e, i) {
+        var x = margem.esq + i * larguraGrupo + (larguraGrupo - larguraBarra) / 2;
+        var y = coordY(e.visitantes);
+        var alturaBarra = margem.topo + areaAltura - y;
+        var centroX = x + larguraBarra / 2;
+        var baseY = margem.topo + areaAltura + 22;
+        return (
+          <g key={e.evento}>
+            <title>{rotularEtapa(e.evento) + ": " + e.visitantes + " visitantes"}</title>
+            <rect x={x} y={y} width={larguraBarra} height={Math.max(alturaBarra, 0)} rx={4} fill="url(#col-onboarding-grad)" />
+            <text x={centroX} y={y - 8} fontSize="16" fill="#cbd5e1" textAnchor="middle">
+              {e.visitantes}
+            </text>
+            <text x={centroX} y={baseY} fontSize="15" fill="#94a3b8" textAnchor="middle">
+              {rotularEtapa(e.evento)}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// Segunda visão: em vez de volume, compara diretamente conclusão da etapa
+// anterior (%) e tempo médio gasto — as duas métricas que o funil de barras
+// só mostrava em texto pequeno.
+function GraficoComparativoEtapas({ etapas, rotularEtapa }) {
+  var maiorTempo = Math.max(1, ...etapas.map(function (e) { return e.tempoMedioSegundos || 0; }));
+
+  return (
+    <div className="comparativo-grid">
+      <div>
+        <h3 className="grafico-subtitulo">Conclusão da etapa anterior</h3>
+        <div className="barras-h">
+          {etapas.map(function (e, i) {
+            var anterior = i > 0 ? etapas[i - 1].visitantes : null;
+            var pct = anterior ? Math.min(100, (e.visitantes / anterior) * 100) : 100;
+            return (
+              <div className="barra-h-linha" key={e.evento}>
+                <span className="barra-h-rotulo" title={nomeAmigavelEtapa(e.evento)}>
+                  {rotularEtapa(e.evento)}
+                </span>
+                <div className="barra-h-trilha">
+                  <div className="barra-h-preenchimento" style={{ width: Math.max(pct, 2) + "%", background: corConclusao(pct) }} />
+                </div>
+                <span className="barra-h-valor">{fmtPct1(pct)}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div>
+        <h3 className="grafico-subtitulo">Tempo médio na etapa</h3>
+        <div className="barras-h">
+          {etapas.map(function (e) {
+            var pct = e.tempoMedioSegundos ? (e.tempoMedioSegundos / maiorTempo) * 100 : 0;
+            return (
+              <div className="barra-h-linha" key={e.evento}>
+                <span className="barra-h-rotulo" title={nomeAmigavelEtapa(e.evento)}>
+                  {rotularEtapa(e.evento)}
+                </span>
+                <div className="barra-h-trilha">
+                  <div className="barra-h-preenchimento" style={{ width: Math.max(pct, 2) + "%", background: "#06b6d4" }} />
+                </div>
+                <span className="barra-h-valor">{fmtTempo(e.tempoMedioSegundos)}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SeletorVisualizacaoFunil({ valor, aoMudar }) {
+  var opcoes = [
+    { chave: "funil", rotulo: "Funil", icone: "barras" },
+    { chave: "colunas", rotulo: "Colunas", icone: "colunas" },
+    { chave: "comparativo", rotulo: "Conclusão x tempo", icone: "grafico" },
+  ];
+  return (
+    <div className="seletor-viz">
+      {opcoes.map(function (op) {
+        return (
+          <button
+            key={op.chave}
+            type="button"
+            className={"seletor-viz-btn" + (valor === op.chave ? " ativo" : "")}
+            onClick={function () {
+              aoMudar(op.chave);
+            }}
+          >
+            <Icone nome={op.icone} tamanho={15} />
+            {op.rotulo}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Onboarding() {
   const router = useRouter();
 
@@ -57,6 +229,7 @@ export default function Onboarding() {
   const [filtroHidratado, setFiltroHidratado] = useState(false);
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(true);
+  const [visualizacaoFunil, setVisualizacaoFunil] = useState("funil");
 
   useEffect(
     function () {
@@ -129,6 +302,7 @@ export default function Onboarding() {
   });
 
   var semDados = dados && dados.etapas && dados.etapas.length === 0;
+  var rotularEtapa = dados ? criarRotuladorEtapas(dados.etapas) : nomeAmigavelEtapa;
 
   return (
     <Shell
@@ -165,7 +339,7 @@ export default function Onboarding() {
         </div>
       </div>
 
-      {carregando && <Esqueleto cartoes={4} secoes={2} />}
+      {carregando && <Esqueleto cartoes={5} secoes={2} />}
 
       {!carregando && semDados && (
         <EstadoVazio
@@ -179,39 +353,68 @@ export default function Onboarding() {
       {!carregando && dados && !semDados && (
         <>
           <div className="cards">
+            <CartaoKpi rotulo="Visitaram" valor={fmtN(dados.visitaram)} acento="#94a3b8" />
+            <CartaoKpi rotulo="Taxa de rejeição de início" valor={fmtPct1(dados.taxaRejeicaoInicio)} acento="#ef4444" />
             <CartaoKpi rotulo="Iniciaram" valor={fmtN(dados.iniciaram)} acento="#6366f1" />
             <CartaoKpi rotulo="Concluíram" valor={fmtN(dados.concluiram)} acento="#22c55e" />
             <CartaoKpi rotulo="Taxa de conclusão" valor={fmtPct1(dados.taxaConclusao)} acento="#14b8a6" />
           </div>
 
-          <Secao id="funil-onboarding" titulo="Funil de etapas" aberta aoAlternar={function () {}}>
-            <div className="funil">
-              {dados.etapas.map(function (e, i) {
-                var pctTotal = dados.etapas[0].visitantes > 0 ? Math.min(100, (e.visitantes / dados.etapas[0].visitantes) * 100) : 0;
-                var anterior = i > 0 ? dados.etapas[i - 1].visitantes : null;
-                var passo = anterior && e.visitantes <= anterior ? (e.visitantes / anterior) * 100 : null;
-                return (
-                  <div className="funil-etapa" key={e.evento}>
-                    <span className="funil-nome">{nomeAmigavelEtapa(e.evento)}</span>
-                    <div className="funil-trilha">
-                      <div className="funil-barra" style={{ width: Math.max(pctTotal, 1.5) + "%", background: "#6366f1" }} />
+          <Secao
+            id="funil-onboarding"
+            titulo="Funil de etapas"
+            aberta
+            aoAlternar={function () {}}
+            extra={<SeletorVisualizacaoFunil valor={visualizacaoFunil} aoMudar={setVisualizacaoFunil} />}
+          >
+            {visualizacaoFunil === "funil" && (
+              <div className="funil">
+                {dados.etapas.map(function (e, i) {
+                  var pctTotal = dados.etapas[0].visitantes > 0 ? Math.min(100, (e.visitantes / dados.etapas[0].visitantes) * 100) : 0;
+                  var anterior = i > 0 ? dados.etapas[i - 1].visitantes : null;
+                  var passo = anterior ? Math.min(100, (e.visitantes / anterior) * 100) : null;
+                  var maiorTempo = Math.max(1, ...dados.etapas.map(function (x) { return x.tempoMedioSegundos || 0; }));
+                  var pctTempo = e.tempoMedioSegundos ? (e.tempoMedioSegundos / maiorTempo) * 100 : 0;
+                  return (
+                    <div className="funil-etapa" key={e.evento}>
+                      <div className="funil-nome-wrap">
+                        <span className="funil-nome">{rotularEtapa(e.evento)}</span>
+                        <span className="funil-nome-original" title={nomeAmigavelEtapa(e.evento)}>
+                          {nomeAmigavelEtapa(e.evento)}
+                        </span>
+                      </div>
+                      <div className="funil-trilha">
+                        <div className="funil-barra" style={{ width: Math.max(pctTotal, 1.5) + "%", background: "#6366f1" }} />
+                      </div>
+                      <div className="funil-numeros">
+                        <span className="funil-valor">{fmtN(e.visitantes)}</span>
+                        <span className="funil-info">{fmtPct1(pctTotal)} do 1º passo</span>
+                        <div className="funil-mini">
+                          {passo != null && (
+                            <FunilMini rotulo="conclusão" pct={passo} cor={corConclusao(passo)} valorTexto={fmtPct1(passo)} />
+                          )}
+                          {e.tempoMedioSegundos != null && (
+                            <FunilMini rotulo="tempo" pct={pctTempo} cor="#06b6d4" valorTexto={fmtTempo(e.tempoMedioSegundos)} />
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="funil-numeros">
-                      <span className="funil-valor">{fmtN(e.visitantes)}</span>
-                      <span className="funil-info">{fmtPct1(pctTotal)} do 1º passo</span>
-                      {passo != null && <span className="funil-info">{fmtPct1(passo)} da etapa anterior</span>}
-                      {e.tempoMedioSegundos != null && (
-                        <span className="funil-info">tempo médio: {fmtTempo(e.tempoMedioSegundos)}</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {visualizacaoFunil === "colunas" && <GraficoColunasEtapas etapas={dados.etapas} rotularEtapa={rotularEtapa} />}
+
+            {visualizacaoFunil === "comparativo" && (
+              <GraficoComparativoEtapas etapas={dados.etapas} rotularEtapa={rotularEtapa} />
+            )}
+
             <p className="valor-secundario" style={{ marginTop: 14 }}>
-              A ordem das etapas segue quantos visitantes chegaram em cada uma (não uma ordem fixa configurada) —
-              conforme os passos do fluxo forem enviados pelo app, a ordem aqui se ajusta sozinha. A conclusão
-              (evento "quiz_finalizado") entra no card "Concluíram" acima, fora dessa lista.
+              A ordem das etapas ("Tela 01", "Tela 02"...) segue quantos visitantes chegaram em cada uma (não uma
+              ordem fixa configurada) — conforme os passos do fluxo forem enviados pelo app, a ordem aqui se ajusta
+              sozinha; o nome técnico do evento aparece junto, menor, pra identificar cada tela. A conclusão (evento
+              "quiz_finalizado") entra no card "Concluíram" acima, fora dessa lista.
             </p>
           </Secao>
 
@@ -226,7 +429,7 @@ export default function Onboarding() {
                 var total = linhas.reduce(function (s, l) { return s + l.total; }, 0);
                 return (
                   <div key={evento} style={{ marginBottom: 18 }}>
-                    <h3 className="grafico-subtitulo">{nomeAmigavelEtapa(evento)}</h3>
+                    <h3 className="grafico-subtitulo">{rotularEtapa(evento)}</h3>
                     <table>
                       <thead>
                         <tr>
@@ -266,7 +469,7 @@ export default function Onboarding() {
                 return (
                   <div key={passo} style={{ marginBottom: 18 }}>
                     <h3 className="grafico-subtitulo">
-                      {nomeAmigavelEtapa(passo)} <span className="valor-secundario">— {fmtN(info.total)} respostas</span>
+                      {rotularEtapa(passo)} <span className="valor-secundario">— {fmtN(info.total)} respostas</span>
                     </h3>
                     {opcoes.length > 0 && (
                       <table>
@@ -317,7 +520,7 @@ export default function Onboarding() {
                             {a.siteNome}
                           </span>
                         </td>
-                        <td>{nomeAmigavelEtapa(a.ultimoPasso)}</td>
+                        <td>{rotularEtapa(a.ultimoPasso)}</td>
                         <td>{dataHoraBR(a.ultimoEm)}</td>
                         <td>
                           <Link className="link-acao" href={"/jornada?visitor_id=" + encodeURIComponent(a.visitorId)}>
