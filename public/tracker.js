@@ -312,14 +312,284 @@
    * como texto curto em "rotulo". Fica guardado à parte (tabela
    * "onboarding_respostas"), sem afetar a contagem do funil.
    */
+  // Gancho opcional que o onboarding (ver abaixo) usa pra enriquecer certos
+  // passos antes de sair — ex: o "quiz_finalizado" ganha plano/ciclo/desfecho.
+  var antesDoPasso = null;
+
   function enviarPasso(evento, opcoes) {
     opcoes = opcoes || {};
+    if (antesDoPasso) {
+      try {
+        opcoes = antesDoPasso(evento, opcoes) || opcoes;
+      } catch (e) {
+        // enriquecer é um extra: nunca pode impedir o passo de ser registrado
+      }
+    }
     var extra = {};
     if (opcoes.rotulo) extra.rotulo = opcoes.rotulo;
     if (opcoes.valor !== undefined && opcoes.valor !== null) extra.valor = opcoes.valor;
     if (opcoes.respostas !== undefined && opcoes.respostas !== null) extra.respostas = opcoes.respostas;
     enviarPayload(montarPayload(evento, extra));
   }
+
+  // --- Dados de quem se cadastra DENTRO do onboarding (leitura da própria tela) ---
+  // No onboarding do app (relinq-onboarding) a conta nasce na 2ª tela, e o
+  // app não manda esses dados pro tracker — então o script lê os campos da
+  // tela e dispara "dados_cadastro" com { respostas: { negocio, email,
+  // celular, nome_responsavel } }. Nada no app precisa mudar: ele já carrega
+  // este script.
+  //
+  // Só lê os campos que identificam QUEM está se cadastrando, reconhecidos
+  // pelo atributo autocomplete que o app já marca neles: organization
+  // (negócio), email, tel (celular, com o país do seletor ao lado) e name
+  // (nome de quem atende sozinha). Fica de fora, de propósito:
+  //   - senha (nunca é lida);
+  //   - qualquer campo sem esses autocomplete — preço, duração, busca de
+  //     contatos e os dados da CLIENTE do primeiro agendamento (dado de
+  //     terceiros). O celular só é lido na tela que também tem o campo de
+  //     e-mail, pra não confundir com o WhatsApp da cliente.
+  //
+  // Dispara assim que o campo é preenchido (não só ao concluir a tela):
+  // quem digita e desiste também fica registrado. O evento NÃO começa com
+  // "onboard_" de propósito, pra não virar uma etapa do funil nem mexer na
+  // contagem de abandono (que usa o último "onboard_*").
+  //
+  // Ligado só no site abaixo; outro site pode ligar com
+  // data-capturar-cadastro="true" na tag do script.
+  var SITES_COM_CAPTURA = ["relinq-onboarding"];
+  var capturaDoOnboardingLigada =
+    SITES_COM_CAPTURA.indexOf(site) !== -1 ||
+    (scriptTag && scriptTag.getAttribute("data-capturar-cadastro") === "true");
+
+  (function capturarCadastroDoOnboarding() {
+    if (!capturaDoOnboardingLigada) return;
+
+    var dados = {};
+    var temporizador = null;
+
+    function valorDe(el) {
+      return el && typeof el.value === "string" ? el.value.trim() : "";
+    }
+
+    function codigoDoPais(inputTel) {
+      // O seletor de país fica na mesma caixa do campo; a opção marcada
+      // traz o código no texto, ex: "🇧🇷 Brasil (+55)".
+      var caixa = inputTel.closest ? inputTel.closest(".onb-phone") : null;
+      var seletor = caixa ? caixa.querySelector("select") : null;
+      var opcao = seletor ? seletor.options[seletor.selectedIndex] : null;
+      var m = opcao ? /\(\+(\d+)\)/.exec(opcao.textContent || "") : null;
+      return m ? "+" + m[1] : "";
+    }
+
+    function lerDaTela() {
+      var achados = {};
+
+      var email = document.querySelector('input[autocomplete="email"]');
+      if (email) {
+        var enderecoEmail = valorDe(email).toLowerCase();
+        if (/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(enderecoEmail)) achados.email = enderecoEmail;
+
+        var negocio = valorDe(document.querySelector('input[autocomplete="organization"]'));
+        if (negocio.length >= 2) achados.negocio = negocio;
+
+        var tel = document.querySelector('input[autocomplete="tel"]');
+        var digitos = valorDe(tel).replace(/\D+/g, "");
+        if (tel && digitos.length >= 8) achados.celular = codigoDoPais(tel) + digitos;
+      }
+
+      var nome = valorDe(document.querySelector('input[autocomplete="name"]'));
+      if (nome.length >= 2) achados.nome_responsavel = nome;
+
+      return achados;
+    }
+
+    // Só envia o que mudou desde o último envio (cada tela relê os mesmos
+    // campos várias vezes: blur, clique, pausa na digitação).
+    function enviarSeMudou() {
+      clearTimeout(temporizador);
+      var achados = lerDaTela();
+      var mudou = false;
+      Object.keys(achados).forEach(function (chave) {
+        if (dados[chave] !== achados[chave]) {
+          dados[chave] = achados[chave];
+          mudou = true;
+        }
+      });
+      if (!mudou) return;
+      enviarPayload(montarPayload("dados_cadastro", { respostas: Object.assign({}, dados) }));
+    }
+
+    document.addEventListener("change", enviarSeMudou, true);
+    document.addEventListener("focusout", enviarSeMudou, true);
+    // Clique em qualquer lugar (ex: "Continuar") roda ANTES do app avançar de
+    // tela — captura a fase de captura do documento — e cobre o iOS, onde
+    // tocar num botão nem sempre tira o foco do campo.
+    document.addEventListener("click", enviarSeMudou, true);
+    // Pausa na digitação / preenchimento automático do navegador.
+    document.addEventListener(
+      "input",
+      function () {
+        clearTimeout(temporizador);
+        temporizador = setTimeout(enviarSeMudou, 1500);
+      },
+      true
+    );
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") enviarSeMudou();
+    });
+    window.addEventListener("pagehide", enviarSeMudou);
+  })();
+
+  // --- Telas do onboarding que o app não reporta + desfecho do plano ---
+  // O app dispara um "onboard_*" ao concluir cada tela, mas deixa de fora a
+  // identificação (onde a conta nasce), o modo de trabalho e a agenda de
+  // contatos — e a tela de planos termina só com "quiz_finalizado", sem dizer
+  // qual plano nem se a pessoa pagou. Pra fechar o funil até o fim sem mexer
+  // no app, o tracker usa o rascunho que o próprio app guarda no navegador
+  // (localStorage "relinq:onboarding:draft": tela atual, plano, ciclo, equipe).
+  // É só leitura, e se o rascunho não existir ou mudar de formato nada quebra:
+  // essas telas só deixam de aparecer.
+  //
+  //   1) Ao SAIR (pra frente) de identificação, modo de trabalho ou contatos,
+  //      dispara onboard_identificacao / onboard_modo_trabalho / onboard_contatos
+  //      — assim quem abandona logo depois aparece no ponto certo do funil.
+  //   2) No "quiz_finalizado" (fim do fluxo), dispara onboard_plano e anexa ao
+  //      quiz_finalizado o desfecho: resultado "free" ou "pago", plano, ciclo,
+  //      forma de pagamento (cartão/PIX) e tamanho da equipe.
+  //
+  // "Pago": o app só conclui o fluxo pelo caminho do pagamento DEPOIS que o
+  // Mercado Pago aprova (cartão na hora, PIX quando cai) — por isso o rótulo
+  // "Foi pro pagamento" dele é lido aqui como pagamento aprovado. Quem escolhe
+  // um plano e desiste no meio do pagamento não gera desfecho nenhum.
+  (function acompanharTelasDoOnboarding() {
+    if (!capturaDoOnboardingLigada) return;
+
+    var CHAVE_RASCUNHO = "relinq:onboarding:draft";
+    var CHAVE_ENVIADOS = "relinq_onb_enviados";
+    var ORDEM_DAS_TELAS = [
+      "welcome", "identity", "work_mode", "area", "services", "service_prices",
+      "business", "contacts", "first_appointment", "source", "plan",
+    ];
+
+    // Eventos das telas que o app não reporta. Só dispara na saída pra frente.
+    var EVENTO_DA_TELA = {
+      identity: function () {
+        return ["onboard_identificacao", {}];
+      },
+      work_mode: function (rascunho) {
+        var rotulo = rascunho.workMode === "team" ? "Com equipe" : rascunho.workMode === "solo" ? "Sozinha" : null;
+        var opcoes = { respostas: { modo: rascunho.workMode || null, equipe: Number(rascunho.teamSize) || null } };
+        if (rotulo) opcoes.rotulo = rotulo;
+        return ["onboard_modo_trabalho", opcoes];
+      },
+      contacts: function () {
+        return ["onboard_contatos", {}];
+      },
+    };
+
+    var enviados = {};
+    try {
+      enviados = JSON.parse(localStorage.getItem(CHAVE_ENVIADOS)) || {};
+    } catch (e) {}
+
+    function guardarEnviados() {
+      try {
+        localStorage.setItem(CHAVE_ENVIADOS, JSON.stringify(enviados));
+      } catch (e) {}
+    }
+
+    function lerRascunho() {
+      try {
+        return JSON.parse(localStorage.getItem(CHAVE_RASCUNHO)) || {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    var telaAtual = null;
+    var entrouEm = Date.now();
+
+    function segundosNaTela() {
+      return Math.round((Date.now() - entrouEm) / 1000);
+    }
+
+    function verificarTela() {
+      var rascunho = lerRascunho();
+      var tela = rascunho.stepId;
+      if (!tela || tela === telaAtual) return;
+
+      var anterior = telaAtual;
+      var segundos = segundosNaTela();
+      telaAtual = tela;
+      entrouEm = Date.now();
+
+      // Primeira leitura: só aprende onde a pessoa está.
+      if (!anterior) return;
+
+      var avancou = ORDEM_DAS_TELAS.indexOf(tela) > ORDEM_DAS_TELAS.indexOf(anterior) && ORDEM_DAS_TELAS.indexOf(anterior) !== -1;
+      if (!avancou || !EVENTO_DA_TELA[anterior] || enviados[anterior]) return;
+      // Sem conta criada, a tela de identificação não foi concluída (ex: foi
+      // pro login) — não conta como passo feito.
+      if (anterior === "identity" && !rascunho.accountCreated) return;
+
+      var evento = EVENTO_DA_TELA[anterior](rascunho);
+      enviados[anterior] = 1;
+      guardarEnviados();
+      evento[1].valor = segundos;
+      enviarPayload(montarPayload(evento[0], evento[1]));
+    }
+
+    setInterval(verificarTela, 500);
+    verificarTela();
+
+    function formaDePagamentoNaTela() {
+      var el = document.querySelector(".onb-method--on .onb-method__name");
+      var texto = el ? el.textContent || "" : "";
+      if (/pix/i.test(texto)) return "PIX";
+      if (/cart/i.test(texto)) return "Cartão";
+      return null;
+    }
+
+    antesDoPasso = function (evento, opcoes) {
+      if (evento === "onboard_plano") {
+        enviados.plano = 1;
+        guardarEnviados();
+        return opcoes;
+      }
+      if (evento !== "quiz_finalizado") return opcoes;
+
+      var rascunho = lerRascunho();
+      var pago = /pagamento/i.test(opcoes.rotulo || "");
+      // No Free, o plano do rascunho é só o que ela estava olhando na vitrine.
+      var plano = pago ? rascunho.planId || null : "FREE";
+      var ciclo = pago ? rascunho.billingCycle || null : null;
+
+      var desfecho = {
+        resultado: pago ? "pago" : "free",
+        plano: plano,
+        ciclo: ciclo,
+        forma_pagamento: pago ? formaDePagamentoNaTela() : null,
+        equipe: Number(rascunho.teamSize) || null,
+      };
+
+      // Se o app não mandou o passo do plano (o normal), manda agora.
+      if (!enviados.plano) {
+        enviarPayload(
+          montarPayload("onboard_plano", {
+            rotulo: pago ? (plano || "—") + (ciclo ? " (" + ciclo + ")" : "") : "FREE",
+            valor: segundosNaTela(),
+            respostas: desfecho,
+          })
+        );
+      }
+
+      // Fim do fluxo: zera, pro próximo onboarding feito neste mesmo navegador.
+      enviados = {};
+      guardarEnviados();
+
+      return Object.assign({}, opcoes, { respostas: desfecho });
+    };
+  })();
 
   // --- Auto-detecção de CTAs (sem precisar de onclick="relinqTrack(...)") ---
   // Detecta destinos conhecidos (WhatsApp, tel, mailto, lojas de app, redes
