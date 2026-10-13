@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Shell from "../components/Shell";
+import { nomeDaTela } from "../lib/onboardingTelas";
 
 var EVENTOS_DE_CONCLUSAO = ["quiz_finalizado", "conversao"];
+
+// Cada tela aberta do onboarding vira um "tela_onboarding" (rótulo = id da tela).
+var EVENTO_TELA_VISTA = "tela_onboarding";
+
+function ehEventoDeOnboarding(tipoEvento) {
+  return tipoEvento.indexOf("onboard_") === 0 || tipoEvento === EVENTO_TELA_VISTA;
+}
 
 function nomeAmigavelEvento(tipoEvento) {
   var mapa = {
@@ -13,6 +21,7 @@ function nomeAmigavelEvento(tipoEvento) {
     whatsapp_nao_abriu: "WhatsApp não abriu",
     dados_cadastro: "Preencheu dados do cadastro",
     quiz_finalizado: "Onboarding finalizado",
+    tela_onboarding: "Abriu a tela",
   };
   if (mapa[tipoEvento]) return mapa[tipoEvento];
   // "onboard_precos_duracao" -> "Precos duracao" (mesma convenção da tela /onboarding).
@@ -178,6 +187,11 @@ export default function Jornada() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
 
+  // Lista de quem já tem nome e celular: carrega sozinha, sem busca.
+  const [pessoas, setPessoas] = useState(null);
+  const [filtroPessoas, setFiltroPessoas] = useState("");
+  const [carregandoPessoas, setCarregandoPessoas] = useState(false);
+
   // Abre direto a jornada de um visitante quando a página é acessada com
   // ?visitor_id=... na URL (ex: o link "Ver jornada" da tela /onboarding).
   useEffect(
@@ -187,6 +201,41 @@ export default function Jornada() {
       if (id && !visitorAtual) abrirVisitante(String(id));
     },
     [router.isReady, router.query.visitor_id]
+  );
+
+  function carregarPessoas(filtro, anteriores) {
+    var offset = anteriores ? anteriores.itens.length : 0;
+    setCarregandoPessoas(true);
+    fetch("/api/jornada?lista=1&limite=50&offset=" + offset + "&q=" + encodeURIComponent(filtro))
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (dados) {
+        var novos = dados.itens || [];
+        setPessoas({
+          total: dados.total || 0,
+          itens: anteriores ? anteriores.itens.concat(novos) : novos,
+        });
+        setCarregandoPessoas(false);
+      })
+      .catch(function () {
+        setErro("Erro ao carregar a lista de clientes.");
+        setCarregandoPessoas(false);
+      });
+  }
+
+  // Abre já com a lista; ao digitar no filtro, recarrega do começo (com uma
+  // pequena espera, pra não buscar a cada tecla).
+  useEffect(
+    function () {
+      var espera = setTimeout(function () {
+        carregarPessoas(filtroPessoas.trim(), null);
+      }, filtroPessoas ? 300 : 0);
+      return function () {
+        clearTimeout(espera);
+      };
+    },
+    [filtroPessoas]
   );
 
   // IDs gerados pelo tracker.js seguem o formato v_<timestamp>_<aleatório>
@@ -258,6 +307,99 @@ export default function Jornada() {
       titulo="Jornada do visitante"
       subtitulo="Veja o caminho completo de uma pessoa entre as LPs"
     >
+
+      {!visitorAtual && (
+        <div className="secao">
+          <div className="secao-cabecalho">
+            <h2>Clientes{pessoas ? " (" + pessoas.total + ")" : ""}</h2>
+            <input
+              type="text"
+              placeholder="Filtrar por nome, celular ou e-mail..."
+              value={filtroPessoas}
+              onChange={function (e) {
+                setFiltroPessoas(e.target.value);
+              }}
+              style={{ minWidth: 260 }}
+            />
+          </div>
+          <p className="vazio" style={{ marginBottom: 16 }}>
+            Todo mundo que já tem pelo menos nome e celular — do cadastro do onboarding ou da aba
+            Clientes. Os mais recentes primeiro.
+          </p>
+
+          {!pessoas && carregandoPessoas && <p className="vazio">Carregando...</p>}
+
+          {pessoas && pessoas.itens.length === 0 && (
+            <p className="vazio">
+              {filtroPessoas
+                ? "Ninguém encontrado com esse filtro."
+                : "Ainda não há ninguém com nome e celular."}
+            </p>
+          )}
+
+          {pessoas && pessoas.itens.length > 0 && (
+            <>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Celular</th>
+                    <th>E-mail</th>
+                    <th>LP</th>
+                    <th>Plano</th>
+                    <th>Última atividade</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pessoas.itens.map(function (p) {
+                    return (
+                      <tr key={p.visitor_id}>
+                        <td>
+                          {p.nome}
+                          {p.negocio && p.nome_responsavel && p.nome_responsavel !== p.negocio && (
+                            <span className="funil-nome-original" style={{ display: "block" }}>
+                              {p.nome_responsavel}
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ whiteSpace: "nowrap" }}>{formatarCelular(p.celular)}</td>
+                        <td>{p.email || "—"}</td>
+                        <td>{p.site_nome || "—"}</td>
+                        <td>{p.desfecho ? descreverDesfecho(p.desfecho) : "—"}</td>
+                        <td style={{ whiteSpace: "nowrap" }}>{p.atualizado_em ? formatarData(p.atualizado_em) : "—"}</td>
+                        <td>
+                          <button
+                            className="link-acao"
+                            onClick={function () {
+                              abrirVisitante(p.visitor_id);
+                            }}
+                          >
+                            Ver jornada
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {pessoas.itens.length < pessoas.total && (
+                <p style={{ marginTop: 12 }}>
+                  <button
+                    className="btn"
+                    disabled={carregandoPessoas}
+                    onClick={function () {
+                      carregarPessoas(filtroPessoas.trim(), pessoas);
+                    }}
+                  >
+                    {carregandoPessoas ? "Carregando..." : "Carregar mais (" + (pessoas.total - pessoas.itens.length) + " restantes)"}
+                  </button>
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {!visitorAtual && (
         <div className="secao">
@@ -383,15 +525,21 @@ export default function Jornada() {
 
           {eventos && eventos.length > 0 && (function () {
             var teveOnboarding = eventos.some(function (ev) {
-              return ev.tipo_evento.indexOf("onboard_") === 0;
+              return ehEventoDeOnboarding(ev.tipo_evento);
             });
             var concluiu = eventos.some(function (ev) {
               return EVENTOS_DE_CONCLUSAO.indexOf(ev.tipo_evento) !== -1;
             });
+            // Onde parou: a última TELA ABERTA (o evento "onboard_*" marca tela
+            // concluída, então ficaria uma tela atrás). Sem registro de telas
+            // (dados antigos), cai no último passo concluído.
             var indiceUltimoOnboarding = -1;
+            var indiceUltimaTela = -1;
             eventos.forEach(function (ev, i) {
+              if (ev.tipo_evento === EVENTO_TELA_VISTA) indiceUltimaTela = i;
               if (ev.tipo_evento.indexOf("onboard_") === 0) indiceUltimoOnboarding = i;
             });
+            if (indiceUltimaTela !== -1) indiceUltimoOnboarding = indiceUltimaTela;
             // "Parou aqui": só faz sentido marcar quando teve pelo menos um passo de
             // onboarding e nunca chegou na conclusão — senão toda visita comum (sem
             // fluxo nenhum) ganharia o selo de abandono à toa.
@@ -418,7 +566,7 @@ export default function Jornada() {
                           {nomeAmigavelEvento(ev.tipo_evento)}
                           {i === indiceOndeParou && <span className="selo-parou">parou aqui</span>}
                         </td>
-                        <td>{ev.rotulo || "—"}</td>
+                        <td>{ev.tipo_evento === EVENTO_TELA_VISTA && ev.rotulo ? nomeDaTela(ev.rotulo) : ev.rotulo || "—"}</td>
                         <td style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {ev.pagina || "—"}
                         </td>

@@ -507,14 +507,51 @@
     }
 
     var telaAtual = null;
+    var telaVista = null;
     var entrouEm = Date.now();
 
     function segundosNaTela() {
       return Math.round((Date.now() - entrouEm) / 1000);
     }
 
+    // Número de sequência das telas abertas: só cresce, mesmo entre recargas.
+    // É o que diz qual foi a ÚLTIMA tela aberta — o horário do banco tem
+    // resolução de 1 segundo e os envios podem chegar fora de ordem. Parte do
+    // relógio (em segundos) pra continuar crescendo mesmo sem localStorage.
+    var CHAVE_SEQUENCIA = "relinq_onb_seq";
+    function proximaSequencia() {
+      var ultima = 0;
+      try {
+        ultima = parseInt(localStorage.getItem(CHAVE_SEQUENCIA), 10) || 0;
+      } catch (e) {}
+      var seq = Math.max(ultima + 1, Math.floor(Date.now() / 1000));
+      try {
+        localStorage.setItem(CHAVE_SEQUENCIA, String(seq));
+      } catch (e) {}
+      return seq;
+    }
+
+    // Tela em que a pessoa ESTÁ agora. A escolha do plano tem duas fases na
+    // mesma tela do app; a de pagamento (formas de pagamento visíveis) conta
+    // à parte, pra separar quem desistiu de escolher de quem desistiu de pagar.
+    function telaEfetiva(rascunho) {
+      var tela = rascunho.stepId;
+      if (!tela) return null;
+      if (tela === "plan" && document.querySelector(".onb-methods")) return "plan_payment";
+      return tela;
+    }
+
     function verificarTela() {
       var rascunho = lerRascunho();
+
+      // Toda tela aberta vira um registro — é ele que diz ONDE a pessoa
+      // parou (a última tela aberta de quem não finalizou).
+      var efetiva = telaEfetiva(rascunho);
+      if (efetiva && efetiva !== telaVista) {
+        telaVista = efetiva;
+        enviarPayload(montarPayload("tela_onboarding", { rotulo: efetiva, valor: proximaSequencia() }));
+      }
+
       var tela = rascunho.stepId;
       if (!tela || tela === telaAtual) return;
 

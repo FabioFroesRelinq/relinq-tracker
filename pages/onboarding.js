@@ -82,6 +82,12 @@ function corAbandono(pct) {
   return "#22c55e";
 }
 
+// Quantos chegaram na tela dessa etapa. O tracker registra cada tela aberta
+// ("chegaram"); em dados de antes disso só se sabe quem a concluiu.
+function quemChegou(etapa) {
+  return etapa.chegaram != null ? etapa.chegaram : etapa.visitantes;
+}
+
 // Acha a etapa onde mais gente parou de verdade: de quem chegou nessa
 // etapa, que % nunca concluiu o fluxo tendo essa etapa como a última que
 // viu (não quantos deixaram de "entrar" na etapa seguinte — a pessoa pode
@@ -91,8 +97,9 @@ function corAbandono(pct) {
 function calcularGargalo(etapas) {
   var pior = null;
   etapas.forEach(function (e, i) {
-    if (!e.visitantes) return;
-    var pct = Math.min(100, ((e.abandonos || 0) / e.visitantes) * 100);
+    var base = quemChegou(e);
+    if (!base) return;
+    var pct = Math.min(100, ((e.abandonos || 0) / base) * 100);
     if (pior == null || pct > pior.pct) {
       pior = { indice: i, pct: pct };
     }
@@ -616,10 +623,11 @@ export default function Onboarding() {
             {!comparando && visualizacaoFunil === "funil" && (
               <div className="funil">
                 {dados.etapas.map(function (e, i) {
-                  var pctTotal = dados.etapas[0].visitantes > 0 ? Math.min(100, (e.visitantes / dados.etapas[0].visitantes) * 100) : 0;
+                  var baseDoFunil = quemChegou(dados.etapas[0]);
+                  var pctTotal = baseDoFunil > 0 ? Math.min(100, (e.visitantes / baseDoFunil) * 100) : 0;
                   var anterior = i > 0 ? dados.etapas[i - 1].visitantes : null;
                   var passo = anterior ? Math.min(100, (e.visitantes / anterior) * 100) : null;
-                  var pctAbandono = e.visitantes > 0 ? Math.min(100, ((e.abandonos || 0) / e.visitantes) * 100) : 0;
+                  var pctAbandono = quemChegou(e) > 0 ? Math.min(100, ((e.abandonos || 0) / quemChegou(e)) * 100) : 0;
                   var maiorTempo = Math.max(1, ...dados.etapas.map(function (x) { return x.tempoMedioSegundos || 0; }));
                   var pctTempo = e.tempoMedioSegundos ? (e.tempoMedioSegundos / maiorTempo) * 100 : 0;
                   return (
@@ -639,6 +647,12 @@ export default function Onboarding() {
                       <div className="funil-numeros">
                         <span className="funil-valor">{fmtN(e.visitantes)}</span>
                         <span className="funil-info">{fmtPct1(pctTotal)} do 1º passo</span>
+                        {e.chegaram != null && (
+                          <span className="funil-info">
+                            {fmtN(e.chegaram)} chegaram · {fmtN(e.abandonos || 0)} pararam aqui
+                            {e.abandonosNoPagamento > 0 ? " (" + fmtN(e.abandonosNoPagamento) + " no pagamento)" : ""}
+                          </span>
+                        )}
                         <div className="funil-mini">
                           <FunilMini rotulo="abandono" pct={pctAbandono} cor={corAbandono(pctAbandono)} valorTexto={fmtPct1(pctAbandono)} />
                           {passo != null && (
@@ -665,10 +679,11 @@ export default function Onboarding() {
 
             {!comparando && (
               <p className="valor-secundario" style={{ marginTop: 14 }}>
-                A ordem das etapas ("Tela 01", "Tela 02"...) segue quantos visitantes chegaram em cada uma (não uma
-                ordem fixa configurada) — conforme os passos do fluxo forem enviados pelo app, a ordem aqui se ajusta
-                sozinha; o nome técnico do evento aparece junto, menor, pra identificar cada tela. A conclusão (evento
-                "quiz_finalizado") entra no card "Concluíram" acima, fora dessa lista.
+                As etapas seguem a ordem real das telas do app ("Tela 01", "Tela 02"...); o número ao lado de cada
+                uma é quem a concluiu. "Chegaram" e "pararam aqui" vêm das telas que cada pessoa abriu: quem não
+                finalizou o onboarding parou na última tela aberta (a do pagamento é contada na etapa do plano e
+                destacada à parte). Onboards com etapas de nome próprio vêm depois, pela posição média em que
+                aparecem. A conclusão (evento "quiz_finalizado") entra no card "Concluíram" acima, fora dessa lista.
               </p>
             )}
           </Secao>
@@ -775,7 +790,15 @@ export default function Onboarding() {
                             {a.siteNome}
                           </span>
                         </td>
-                        <td>{rotularEtapa(a.ultimoPasso)}</td>
+                        <td>
+                          {a.telaNome || (a.ultimoPasso ? rotularEtapa(a.ultimoPasso) : "—")}
+                          {a.telaNome && a.ultimoPasso && (
+                            <span className="funil-nome-original" style={{ display: "block" }}>
+                              {rotularEtapa(a.ultimoPasso)}
+                              {a.origem === "estimada" ? " · estimada (sem registro das telas)" : ""}
+                            </span>
+                          )}
+                        </td>
                         <td>{dataHoraBR(a.ultimoEm)}</td>
                         <td>
                           <Link className="link-acao" href={"/jornada?visitor_id=" + encodeURIComponent(a.visitorId)}>
