@@ -33,16 +33,169 @@ function juntarCadastro(linhas) {
   return dados;
 }
 
+// Lista de pessoas que já têm pelo menos NOME e CELULAR, sem precisar buscar.
+//
+// Une duas fontes por visitante (o que faltar numa vem da outra):
+//   - o cadastro lido da tela do onboarding ("dados_cadastro": negócio, nome de
+//     quem atende, e-mail, celular);
+//   - a aba Clientes (/api/lead-checkout: nome, e-mail, celular, empresa...).
+// "Nome" é o do negócio, o de quem atende ou o da aba Clientes; "celular" tem
+// que ter pelo menos 8 dígitos. Ambas as tabelas são opcionais.
+const LIMITE_MAXIMO_LISTA = 200;
+const LIMITE_LINHAS_LEITURA = 50000;
+
+function somenteDigitos(texto) {
+  return String(texto || "").replace(/\D+/g, "");
+}
+
+async function listarPessoas(pool, desl, { q, limite, offset }) {
+  const pessoas = new Map();
+
+  function pessoa(visitorId) {
+    if (!pessoas.has(visitorId)) {
+      pessoas.set(visitorId, { visitor_id: visitorId, dados: {}, atualizado_em: "", site_nome: null });
+    }
+    return pessoas.get(visitorId);
+  }
+
+  function atualizar(p, quando) {
+    if (quando && quando > p.atualizado_em) p.atualizado_em = quando;
+  }
+
+  try {
+    const [linhas] = await pool.query(
+      `SELECT r.visitor_id, r.respostas_json, s.nome AS site_nome,
+              DATE_FORMAT(DATE_ADD(r.criado_em, INTERVAL ${desl} MINUTE), '%Y-%m-%d %H:%i:%s') AS criado_em
+       FROM onboarding_respostas r
+       LEFT JOIN sites s ON s.id = r.site_id
+       WHERE r.passo = ?
+       ORDER BY r.criado_em ASC, r.id ASC
+       LIMIT ${LIMITE_LINHAS_LEITURA}`,
+      [PASSO_CADASTRO]
+    );
+    linhas.forEach(function (l) {
+      const dados = lerJson(l.respostas_json);
+      if (!dados || typeof dados !== "object" || Array.isArray(dados)) return;
+      const p = pessoa(l.visitor_id);
+      // Mais recente por último: o valor novo de cada campo vence.
+      Object.assign(p.dados, dados);
+      if (l.site_nome) p.site_nome = l.site_nome;
+      atualizar(p, l.criado_em);
+    });
+  } catch (erro) {
+    if (!(erro && erro.code === "ER_NO_SUCH_TABLE")) {
+      console.error("Erro ao listar cadastros do onboarding:", erro);
+    }
+  }
+
+  try {
+    const [clientes] = await pool.query(
+      `SELECT c.visitor_id, c.nome, c.email, c.celular, c.empresa, c.cupom, c.plano, c.ciclo, s.nome AS site_nome,
+              DATE_FORMAT(DATE_ADD(c.criado_em, INTERVAL ${desl} MINUTE), '%Y-%m-%d %H:%i:%s') AS criado_em
+       FROM clientes c
+       LEFT JOIN sites s ON s.id = c.site_id
+       LIMIT ${LIMITE_LINHAS_LEITURA}`
+    );
+    clientes.forEach(function (c) {
+      const p = pessoa(c.visitor_id);
+      const doCliente = {
+        negocio: c.empresa,
+        nome_responsavel: c.nome,
+        email: c.email,
+        celular: c.celular,
+        cupom: c.cupom,
+        plano: c.plano,
+        ciclo: c.ciclo,
+      };
+      // O que o onboarding já leu da tela tem prioridade; a aba Clientes só completa.
+      Object.keys(doCliente).forEach(function (chave) {
+        if (doCliente[chave] && !p.dados[chave]) p.dados[chave] = doCliente[chave];
+      });
+      if (!p.site_nome && c.site_nome) p.site_nome = c.site_nome;
+      atualizar(p, c.criado_em);
+    });
+  } catch (erro) {
+    if (!(erro && erro.code === "ER_NO_SUCH_TABLE")) {
+      console.error("Erro ao listar clientes:", erro);
+    }
+  }
+
+  const termo = String(q || "").trim().toLowerCase();
+  const termoDigitos = somenteDigitos(termo);
+
+  const completas = Array.from(pessoas.values())
+    .map(function (p) {
+      const d = p.dados;
+      return {
+        visitor_id: p.visitor_id,
+        nome: d.negocio || d.nome_responsavel || null,
+        negocio: d.negocio || null,
+        nome_responsavel: d.nome_responsavel || null,
+        email: d.email || null,
+        celular: d.celular || null,
+        plano: d.plano || null,
+        site_nome: p.site_nome,
+        atualizado_em: p.atualizado_em,
+      };
+    })
+    .filter(function (p) {
+      if (!p.nome || somenteDigitos(p.celular).length < 8) return false;
+      if (!termo) return true;
+      const texto = [p.negocio, p.nome_responsavel, p.email].filter(Boolean).join(" ").toLowerCase();
+      return texto.indexOf(termo) !== -1 || (termoDigitos.length > 0 && somenteDigitos(p.celular).indexOf(termoDigitos) !== -1);
+    })
+    .sort(function (a, b) {
+      return a.atualizado_em < b.atualizado_em ? 1 : a.atualizado_em > b.atualizado_em ? -1 : 0;
+    });
+
+  const itens = completas.slice(offset, offset + limite);
+
+  // Como cada um terminou a tela de planos (free / pago), só pra quem aparece
+  // nesta página da lista.
+  if (itens.length > 0) {
+    try {
+      const [fins] = await pool.query(
+        `SELECT visitor_id, respostas_json FROM onboarding_respostas
+         WHERE passo = ? AND visitor_id IN (${itens.map(function () { return "?"; }).join(",")})
+         ORDER BY criado_em ASC, id ASC`,
+        [PASSO_FIM].concat(itens.map(function (i) { return i.visitor_id; }))
+      );
+      const porVisitante = {};
+      fins.forEach(function (f) {
+        const dados = lerJson(f.respostas_json);
+        if (dados && typeof dados === "object") porVisitante[f.visitor_id] = dados;
+      });
+      itens.forEach(function (i) {
+        i.desfecho = porVisitante[i.visitor_id] || null;
+      });
+    } catch (erro) {
+      if (!(erro && erro.code === "ER_NO_SUCH_TABLE")) {
+        console.error("Erro ao buscar desfechos da lista:", erro);
+      }
+    }
+  }
+
+  return { total: completas.length, itens };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ erro: "Método não permitido" });
   }
 
-  const { visitor_id, busca } = req.query;
+  const { visitor_id, busca, lista } = req.query;
 
   try {
     const pool = getPool();
     const desl = Math.trunc((await infoFuso(pool)).deslocamentoMin);
+
+    // Lista de pessoas com nome e celular (a tela abre com ela, sem busca).
+    if (lista) {
+      const limite = Math.min(Math.max(parseInt(req.query.limite, 10) || 50, 1), LIMITE_MAXIMO_LISTA);
+      const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+      const resultado = await listarPessoas(pool, desl, { q: req.query.q, limite, offset });
+      return res.status(200).json(resultado);
+    }
 
     // Busca o histórico completo de um visitante específico, em qualquer LP
     if (visitor_id) {
@@ -53,7 +206,7 @@ export default async function handler(req, res) {
          FROM events e
          JOIN sites s ON s.id = e.site_id
          WHERE e.visitor_id = ?
-         ORDER BY e.criado_em ASC`,
+         ORDER BY e.criado_em ASC, e.id ASC`,
         [visitor_id]
       );
 

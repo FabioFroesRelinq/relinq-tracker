@@ -182,9 +182,11 @@ relinqTrack('quiz_finalizado');
 ```
 
 - **`onboard_algumacoisa`** — qualquer evento começando com `onboard_`
-  vira uma etapa do funil na tela `/onboarding`, automaticamente, na
-  ordem de quantos visitantes chegaram em cada uma (sem precisar cadastrar
-  os passos em lugar nenhum).
+  vira uma etapa do funil na tela `/onboarding`, automaticamente. As telas
+  do app da Relinq Beauty saem na **ordem real do app** (lista em
+  `lib/onboardingTelas.js`); etapas com nome próprio, de outros onboards,
+  vêm depois, pela posição média em que aparecem na sequência de cada
+  pessoa (ver "Ordem das telas e onde a pessoa parou").
 - **`valor`** — segundos gastos naquela etapa, do mesmo jeito que já é
   usado em `tempo_pagina`/`video_pause`. Vira o "tempo médio" mostrado no
   funil.
@@ -233,6 +235,19 @@ pelo próprio script — sem deploy do lado do app.
   faltar no card vem de lá (cupom, plano, ciclo). Usa `onboarding_respostas`
   (`db/migration-8.sql`).
 
+### Lista de clientes na Jornada
+
+A aba **Jornada** abre já com a lista de todo mundo que tem **pelo menos nome e
+celular**, sem precisar buscar (`GET /api/jornada?lista=1`). Une duas fontes
+por visitante: o cadastro lido da tela do onboarding (`dados_cadastro`) e a aba
+Clientes (`/api/lead-checkout`) — o que faltar numa vem da outra, e o
+onboarding tem prioridade. "Nome" é o do negócio, o de quem atende ou o da aba
+Clientes; o celular precisa de pelo menos 8 dígitos. Quem tem só um dos dois
+não entra na lista (continua acessível pela busca). Os mais recentes aparecem
+primeiro, 50 por vez ("Carregar mais"), com um filtro por nome, celular ou
+e-mail e, em cada linha, o plano (Free/pago, quando a pessoa finalizou) e o
+link pra jornada completa.
+
 ### Telas que o app não reporta e o desfecho do plano
 
 O app dispara um `onboard_*` ao concluir cada tela, mas deixa de fora
@@ -261,6 +276,37 @@ chave do Mercado Pago não estiver configurada no app, ele manda a pessoa pro
 checkout completo e esse caso também sai como "pago", sem ter pago ainda. Quem
 escolhe um plano e desiste no meio do pagamento não gera desfecho — no funil
 aparece como quem parou antes de `onboard_plano`.
+
+### Ordem das telas e onde a pessoa parou
+
+O funil seguia a quantidade de visitantes de cada etapa, o que embaralha com
+empate ou etapa pulada; e o abandono era atribuído ao **último evento
+enviado** — que marca uma tela *concluída*, então a pessoa na verdade estava
+na tela seguinte. Agora:
+
+- **Ordem** — fixa, a do app (`lib/onboardingTelas.js`): boas-vindas,
+  identificação, modo de trabalho, área, serviços, preços, negócio,
+  contatos, primeiro agendamento, como conheceu, plano.
+- **Telas abertas** — o `tracker.js` manda `tela_onboarding` (rótulo = id da
+  tela, valor = sequência que só cresce) toda vez que a pessoa abre uma tela,
+  inclusive ao voltar. A **última tela aberta** de quem não finalizou é onde
+  ela parou. A sequência (e não o horário, que tem resolução de 1 segundo)
+  decide qual foi a última, mesmo se os envios chegarem fora de ordem.
+- **Pagamento** — a escolha do plano tem duas fases na mesma tela do app.
+  Quando as formas de pagamento aparecem, a tela vira `plan_payment`. No funil
+  ela fica na linha do plano, com o aviso "(N no pagamento)": separa quem
+  desistiu de escolher de quem desistiu de pagar.
+- **Chegaram / pararam aqui** — por etapa, e a % de abandono é sobre quem
+  chegou na tela (não sobre quem a concluiu). Na Jornada, "parou aqui" marca
+  a última tela aberta.
+- **Dados antigos** (de antes do `tela_onboarding`) não têm esse registro: a
+  saída é *estimada* como a tela seguinte à última concluída, e a lista de
+  abandonos avisa "estimada". Contatos (só existe no app) fica fora da
+  estimativa.
+
+Se o app ganhar, perder ou reordenar uma tela, ajuste `lib/onboardingTelas.js`
+(e, no `tracker.js`, `ORDEM_DAS_TELAS` — que só decide quando a tela é
+considerada concluída pras telas que o app não reporta).
 
 ### Comparando com outro onboard
 
