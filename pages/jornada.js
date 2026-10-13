@@ -11,6 +11,8 @@ function nomeAmigavelEvento(tipoEvento) {
     clique_whatsapp: "Clique no WhatsApp",
     whatsapp_aberto: "WhatsApp aberto",
     whatsapp_nao_abriu: "WhatsApp não abriu",
+    dados_cadastro: "Preencheu dados do cadastro",
+    quiz_finalizado: "Onboarding finalizado",
   };
   if (mapa[tipoEvento]) return mapa[tipoEvento];
   // "onboard_precos_duracao" -> "Precos duracao" (mesma convenção da tela /onboarding).
@@ -126,6 +128,36 @@ function renderizarResposta(valor) {
   return <span>{formatarValorSimples(valor)}</span>;
 }
 
+// Celular do Brasil em formato legível (+5511999999999 -> +55 (11) 99999-9999);
+// qualquer outro formato aparece como veio.
+function formatarCelular(valor) {
+  var m = /^\+55(\d{2})(\d{4,5})(\d{4})$/.exec(String(valor || ""));
+  return m ? "+55 (" + m[1] + ") " + m[2] + "-" + m[3] : formatarValorSimples(valor);
+}
+
+var CICLOS_DO_PLANO = { MONTHLY: "Mensal", QUARTERLY: "Trimestral", SEMIANNUAL: "Semestral", ANNUAL: "Anual" };
+
+// Desfecho da tela de planos, em uma frase: "Continuou no Free" ou
+// "Pagou — PRO · Anual · PIX · 3 profissionais".
+function descreverDesfecho(d) {
+  if (d.resultado !== "pago") return "Continuou no plano Free";
+  var partes = [d.plano || "Plano pago"];
+  if (d.ciclo) partes.push(CICLOS_DO_PLANO[d.ciclo] || d.ciclo);
+  if (d.forma_pagamento) partes.push(d.forma_pagamento);
+  if (d.equipe) partes.push(d.equipe + (d.equipe === 1 ? " profissional" : " profissionais"));
+  return "Pagou — " + partes.join(" · ");
+}
+
+var CAMPOS_DO_CADASTRO = [
+  { chave: "negocio", rotulo: "Negócio" },
+  { chave: "nome_responsavel", rotulo: "Nome de quem atende" },
+  { chave: "email", rotulo: "E-mail" },
+  { chave: "celular", rotulo: "Celular", formatar: formatarCelular },
+  { chave: "cupom", rotulo: "Cupom" },
+  { chave: "plano", rotulo: "Plano" },
+  { chave: "ciclo", rotulo: "Ciclo" },
+];
+
 // A API já manda o horário pronto ("2026-09-21 13:45:00", em horário de Brasília).
 // Lemos o texto direto: passar por new Date() aplicaria o fuso do navegador de novo.
 function formatarData(texto) {
@@ -141,6 +173,8 @@ export default function Jornada() {
   const [visitorAtual, setVisitorAtual] = useState(null);
   const [eventos, setEventos] = useState(null);
   const [respostasOnboarding, setRespostasOnboarding] = useState(null);
+  const [cadastro, setCadastro] = useState(null);
+  const [desfecho, setDesfecho] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -201,6 +235,8 @@ export default function Jornada() {
       .then(function (dados) {
         setEventos(dados.eventos || []);
         setRespostasOnboarding(dados.respostasOnboarding || []);
+        setCadastro(dados.cadastro || null);
+        setDesfecho(dados.desfecho || null);
         setCarregando(false);
       })
       .catch(function () {
@@ -213,6 +249,8 @@ export default function Jornada() {
     setVisitorAtual(null);
     setEventos(null);
     setRespostasOnboarding(null);
+    setCadastro(null);
+    setDesfecho(null);
   }
 
   return (
@@ -225,7 +263,8 @@ export default function Jornada() {
         <div className="secao">
           <h2>Buscar visitante</h2>
           <p className="vazio" style={{ marginBottom: 16 }}>
-            Busca por um pedaço de texto salvo como rótulo em algum evento — por
+            Busca por e-mail, nome ou celular de quem se cadastrou no onboarding,
+            ou por um pedaço de texto salvo como rótulo em algum evento — por
             exemplo, um e-mail capturado na conversão (
             <code>?relinq_evento=conversao&relinq_rotulo=email@exemplo.com</code>
             ). Se você já tem o ID do visitante, pode colar ele direto aqui também.
@@ -298,6 +337,45 @@ export default function Jornada() {
           </div>
 
           {carregando && <p className="vazio">Carregando...</p>}
+
+          {cadastro && (function () {
+            var linhas = CAMPOS_DO_CADASTRO.filter(function (campo) {
+              return cadastro[campo.chave];
+            });
+            if (linhas.length === 0) return null;
+            return (
+              <div style={{ marginBottom: 24 }}>
+                <h2>Cadastro</h2>
+                <p className="vazio" style={{ marginBottom: 16 }}>
+                  Dados que a pessoa preencheu no cadastro do onboarding
+                  {cadastro.atualizado_em ? " (última atualização " + formatarData(cadastro.atualizado_em) + ")" : ""}.
+                </p>
+                <table className="tabela-mini">
+                  <tbody>
+                    {linhas.map(function (campo) {
+                      var valor = cadastro[campo.chave];
+                      return (
+                        <tr key={campo.chave}>
+                          <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{campo.rotulo}</td>
+                          <td>{campo.formatar ? campo.formatar(valor) : formatarValorSimples(valor)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+
+          {desfecho && (
+            <div style={{ marginBottom: 24 }}>
+              <h2>Plano</h2>
+              <p className="vazio" style={{ marginBottom: 8 }}>
+                Como a pessoa terminou a tela de planos ({formatarData(desfecho.criado_em)}).
+              </p>
+              <p style={{ fontWeight: 600 }}>{descreverDesfecho(desfecho)}</p>
+            </div>
+          )}
 
           {eventos && eventos.length === 0 && (
             <p className="vazio">Nenhum evento encontrado pra esse visitante.</p>

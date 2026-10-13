@@ -203,6 +203,65 @@ relinqTrack('quiz_finalizado');
   pra decidir quem "abandonou" (teve algum passo, mas nunca chegou nesse
   evento).
 
+### Dados de quem se cadastra no onboarding (aba Jornada)
+
+Quando a conta nasce dentro do próprio onboarding, o app não precisa mandar
+nada a mais: o `tracker.js` **lê os campos do cadastro direto da tela** e
+dispara o evento `dados_cadastro` com `respostas: { negocio, email, celular,
+nome_responsavel }`. Funciona só pro site `relinq-onboarding` (outro site liga
+com `data-capturar-cadastro="true"` na tag do script) e chega no app sozinho,
+pelo próprio script — sem deploy do lado do app.
+
+- **O que é lido** — só campos que identificam quem se cadastra, reconhecidos
+  pelo atributo `autocomplete` que o app já usa: `organization` (negócio),
+  `email`, `tel` (celular, com o código do país escolhido no seletor, ex:
+  `+5511999999999`) e `name` (nome de quem atende sozinha).
+- **O que NÃO é lido** — a senha, nunca; e qualquer outro campo (preço,
+  duração, busca de contatos, e os dados da **cliente** do primeiro
+  agendamento, que são dado de terceiros). O celular só é lido na tela que
+  também tem o campo de e-mail, justamente pra não confundir com o WhatsApp
+  da cliente.
+- **Quando dispara** — assim que o campo é preenchido (ao sair dele, ao clicar
+  em qualquer botão, numa pausa na digitação ou ao fechar a aba), e só quando
+  o valor mudou. Então quem preenche e desiste também aparece. O evento **não**
+  começa com `onboard_`, de propósito: não vira etapa do funil nem mexe na
+  contagem de abandono.
+- **Onde aparece** — na Jornada do visitante, num card **Cadastro** acima da
+  linha do tempo (o valor mais recente de cada campo). A busca da Jornada
+  também acha a pessoa por e-mail, nome do negócio ou celular. Se o mesmo
+  visitante também estiver na aba Clientes (`/api/lead-checkout`), o que
+  faltar no card vem de lá (cupom, plano, ciclo). Usa `onboarding_respostas`
+  (`db/migration-8.sql`).
+
+### Telas que o app não reporta e o desfecho do plano
+
+O app dispara um `onboard_*` ao concluir cada tela, mas deixa de fora
+identificação, modo de trabalho e contatos, e a tela de planos termina só com
+`quiz_finalizado` (sem dizer qual plano nem se pagou). Pro funil ir até o fim,
+o `tracker.js` lê o **rascunho que o próprio app guarda no navegador**
+(`localStorage` `relinq:onboarding:draft`: tela atual, plano, ciclo, equipe) —
+só leitura; se o rascunho sumir ou mudar de formato, essas telas só deixam de
+aparecer, nada quebra:
+
+- **`onboard_identificacao`, `onboard_modo_trabalho`, `onboard_contatos`** —
+  disparados quando a pessoa **sai pra frente** daquela tela (voltar e
+  avançar de novo não duplica). A identificação só conta se a conta foi criada.
+  `onboard_modo_trabalho` leva o rótulo "Sozinha"/"Com equipe".
+- **`onboard_plano`** — disparado no fim do fluxo, com rótulo `FREE` ou
+  `PLANO (CICLO)` (ex: `PRO (ANNUAL)`).
+- **`quiz_finalizado`** — ganha `respostas: { resultado: "free" | "pago",
+  plano, ciclo, forma_pagamento: "PIX" | "Cartão", equipe }`. Aparece na
+  Jornada, no card **Plano** ("Continuou no plano Free" ou "Pagou — PRO ·
+  Anual · PIX · 3 profissionais").
+
+**"Pago" é inferido**: o app só conclui o fluxo pelo caminho do pagamento
+depois que o Mercado Pago aprova (cartão na hora, PIX quando cai), então o
+rótulo dele "Foi pro pagamento" é lido como pagamento aprovado. Exceção: se a
+chave do Mercado Pago não estiver configurada no app, ele manda a pessoa pro
+checkout completo e esse caso também sai como "pago", sem ter pago ainda. Quem
+escolhe um plano e desiste no meio do pagamento não gera desfecho — no funil
+aparece como quem parou antes de `onboard_plano`.
+
 ### Comparando com outro onboard
 
 Quando existe mais de um fluxo de onboarding cadastrado (cada um como uma
